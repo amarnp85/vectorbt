@@ -1,0 +1,7 @@
+#!/bin/bash
+# Simple alias for the fetch_data_cli.py tool
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR"
+python "$SCRIPT_DIR/fetch_data_cli.py" "$@" 
