@@ -29,3 +29,4 @@ tasks.json
 tasks/ 
 
 .venv/
+backtester/vbt_data/
