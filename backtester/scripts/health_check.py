@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Convenience script for running data health check.
+"""Streamlined Health Check Script Wrapper
 
-This is a simple wrapper that imports and runs the data health check module.
-Users can run this directly or use the module form:
+Simple wrapper for the streamlined data health check module.
+This script provides easy access to the health checker from the scripts directory.
 
-Direct script:
+Examples:
+    # Quick health check
+    python backtester/scripts/health_check.py
+    
+    # Auto-fix critical issues
     python backtester/scripts/health_check.py --auto-fix
-
-Module form:
-    python -m backtester.data.health_check.data_healthcheck --auto-fix
+    
+    # Check specific exchange with details
+    python backtester/scripts/health_check.py --exchange binance --detailed
 """
 
 import sys
@@ -18,6 +22,6 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 if __name__ == "__main__":
-    # Import and run the main health check module
+    # Import and run the streamlined health check module
     from backtester.data.health_check.data_healthcheck import main
     exit(main()) 

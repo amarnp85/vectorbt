@@ -426,7 +426,7 @@ python -m backtester.data.health_check.data_healthcheck --timeframe 1h --detaile
 
 ```python
 # Import the data fetching functions
-from backtester.data.fetching.data_fetcher import fetch_data, fetch_top_symbols
+from backtester.data.fetching.data_fetcher_new import fetch_data, fetch_top_symbols
 import vectorbtpro as vbt
 
 # Fetch data with intelligent caching

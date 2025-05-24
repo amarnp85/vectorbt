@@ -1,14 +1,14 @@
 [
-  "FDUSD/USDT",
-  "DAI/USDC",
-  "TUSD/USDC",
   "DAI/USDT",
-  "USDP/USDT",
-  "USDT/BUSD",
+  "TUSD/USDC",
   "BUSD/FDUSD",
-  "USDC/USDT",
-  "BUSD/USDT",
+  "USDP/USDT",
+  "DAI/USDC",
+  "TUSD/USDT",
   "USDP/USDC",
+  "USDT/BUSD",
   "USDC/BUSD",
-  "TUSD/USDT"
+  "FDUSD/USDT",
+  "USDC/USDT",
+  "BUSD/USDT"
 ]

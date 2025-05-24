@@ -32,7 +32,7 @@ from backtester.data.cache_system import (
 )
 
 # Data fetching and storage
-from backtester.data.fetching.data_fetcher import (
+from backtester.data.fetching.data_fetcher_new import (
     fetch_data,
     fetch_top_symbols,
     update_data,

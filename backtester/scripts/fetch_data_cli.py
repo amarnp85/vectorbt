@@ -37,7 +37,7 @@ def format_data_summary(data, exchange_id: str, market_type: str, timeframe: str
         print("❌ No data fetched")
         return
     
-    print(f"\n✅ Data fetched successfully!")
+    print(f"\n✅ Data operation completed successfully!")
     print(f"📊 Exchange: {exchange_id.upper()}")
     print(f"📊 Market: {market_type.upper()}")
     print(f"📊 Timeframe: {timeframe}")
@@ -47,6 +47,23 @@ def format_data_summary(data, exchange_id: str, market_type: str, timeframe: str
     if hasattr(data.wrapper, 'index') and len(data.wrapper.index) > 0:
         print(f"📊 Date range: {data.wrapper.index[0]} to {data.wrapper.index[-1]}")
         print(f"📊 Data points per symbol: {len(data.wrapper.index)}")
+        
+        # Check if this looks like fresh data (recent end date)
+        from datetime import datetime, timezone
+        end_date = data.wrapper.index[-1]
+        if hasattr(end_date, 'tz_convert'):
+            end_date = end_date.tz_convert('UTC')
+        
+        time_since_last = datetime.now(timezone.utc) - end_date.to_pydatetime()
+        hours_since = time_since_last.total_seconds() / 3600
+        
+        if hours_since < 2:  # Very recent data
+            print(f"📊 Data freshness: ✅ Very fresh (updated {hours_since:.1f} hours ago)")
+        elif hours_since < 24:  # Recent data
+            print(f"📊 Data freshness: ✅ Fresh (updated {hours_since:.1f} hours ago)")
+        else:  # Older data
+            days_since = hours_since / 24
+            print(f"📊 Data freshness: ⚠️ Older data (updated {days_since:.1f} days ago)")
     
     # Volume rankings already shown during fetch process - no need to duplicate
 

@@ -1,30 +1,33 @@
 #!/usr/bin/env python3
-"""Data Health Check Script
+"""Streamlined Data Health Check
 
-Analyzes cached VBT data for quality issues including:
-- Date gaps and missing time periods
-- Inception coverage (missing early historical data)
-- Data completeness (NaN values, missing columns)
-- Symbol-specific issues
-- Timeframe consistency
+Focused health analysis for VBT cached data with realistic gap resolution.
+Integrates with the new CLI tools and simplified cache system.
 
-Auto-fix capabilities:
-- Re-fetch data for critical gaps
-- Update data to current time
-- Fill missing inception data
+Key features:
+- Critical gap detection and resolution strategies
+- Data freshness monitoring
+- Cache integrity validation
+- Actionable fix recommendations using available CLI tools
 
 Usage:
     python -m backtester.data.health_check.data_healthcheck [options]
     
 Examples:
-    # Check all data
-    python -m backtester.data.health_check.data_healthcheck
+    # Quick health check with fixes
+    python -m backtester.data.health_check.data_healthcheck --auto-fix
     
-    # Check specific exchange with auto-fix
-    python -m backtester.data.health_check.data_healthcheck --exchange binance --auto-fix
+    # Detailed analysis for specific exchange
+    python -m backtester.data.health_check.data_healthcheck --exchange binance --detailed
     
-    # Check specific timeframe with detailed output
-    python -m backtester.data.health_check.data_healthcheck --timeframe 1h --detailed
+    # Focus on critical issues only
+    python -m backtester.data.health_check.data_healthcheck --critical-only
+    
+    # Fill minor gaps with interpolation
+    python -m backtester.data.health_check.data_healthcheck --interpolate --auto-fix
+    
+    # Use linear interpolation
+    python -m backtester.data.health_check.data_healthcheck --interpolate --interpolation-strategy linear
 """
 
 import argparse
@@ -33,23 +36,32 @@ import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional, Any
 import pandas as pd
-import numpy as np
 from pathlib import Path
 import subprocess
+import logging
 
-# Add parent directories to path to import backtester modules
+# Add parent directories to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from backtester.data.storage.data_storage import data_storage
-from backtester.data.cache_system.cache_manager import cache_manager
+from backtester.data.cache_system.cache_manager import SimpleCacheManager
+from backtester.data.fetching.core.vbt_data_handler import VBTDataHandler
+from backtester.data.fetching.core.freshness_checker import FreshnessChecker
 import vectorbtpro as vbt
 
-class DataHealthChecker:
-    """Comprehensive data health checker for VBT cached data."""
+logger = logging.getLogger(__name__)
+
+class StreamlinedHealthChecker:
+    """Streamlined health checker focused on actionable issues and realistic solutions."""
     
-    def __init__(self, detailed: bool = False, auto_fix: bool = False, reports_dir: str = None):
+    def __init__(self, detailed: bool = False, auto_fix: bool = False, critical_only: bool = False, 
+                 enable_interpolation: bool = False, interpolation_strategy: str = 'financial_forward_fill'):
         self.detailed = detailed
         self.auto_fix = auto_fix
+        self.critical_only = critical_only
+        self.enable_interpolation = enable_interpolation
+        self.interpolation_strategy = interpolation_strategy
+        
         self.issues = {
             'critical': [],
             'warning': [],
@@ -57,962 +69,800 @@ class DataHealthChecker:
         }
         self.fixes_applied = []
         
-        # Set reports directory
-        if reports_dir is None:
-            # Default to reports subfolder in this module
-            self.reports_dir = Path(__file__).parent / 'reports'
-        else:
-            self.reports_dir = Path(reports_dir)
+        # Initialize cache manager
+        self.cache_manager = SimpleCacheManager()
         
-        # Ensure reports directory exists
+        # Reports directory
+        self.reports_dir = Path(__file__).parent / 'reports'
         self.reports_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Load cached inception dates from cache system
-        self.cached_inception_dates = {}
-        self._load_cached_inception_dates()
-        
-        # Fallback inception dates for major symbols (if not in cache)
-        self.fallback_inception_dates = {
-            'BTC/USDT': '2017-08-17',
-            'ETH/USDT': '2017-08-17', 
-            'BNB/USDT': '2017-11-06',
-            'ADA/USDT': '2018-04-17',
-            'XRP/USDT': '2018-05-04',
-            'USDC/USDT': '2018-12-15',
-            'DOGE/USDT': '2019-07-05',
-            'SOL/USDT': '2020-08-11',
-            'AVAX/USDT': '2020-09-22',
-            'PEPE/USDT': '2023-05-05',
-            'SUI/USDT': '2023-05-03',
-            'WLD/USDT': '2023-07-24',
-            'FDUSD/USDT': '2023-07-26',
-            'WIF/USDT': '2024-03-05',
-            'ENA/USDT': '2024-04-02',
-            'NEIRO/USDT': '2024-09-16',
-            'CETUS/USDT': '2024-11-06',
-            'PNUT/USDT': '2024-11-11',
-            'TRUMP/USDT': '2025-01-19'
-        }
     
-    def _load_cached_inception_dates(self):
-        """Load inception dates from the cache system."""
-        try:
-            # Get all exchanges with cached timestamp data
-            for exchange in cache_manager.list_exchanges():
-                timestamps = cache_manager.get_all_timestamps(exchange)
-                if timestamps:
-                    # Convert millisecond timestamps to datetime strings
-                    self.cached_inception_dates[exchange] = {}
-                    for symbol, timestamp_ms in timestamps.items():
-                        try:
-                            # Convert from milliseconds to datetime
-                            dt = datetime.fromtimestamp(timestamp_ms / 1000)
-                            self.cached_inception_dates[exchange][symbol] = dt.strftime('%Y-%m-%d')
-                        except (ValueError, TypeError) as e:
-                            print(f"Warning: Invalid timestamp for {exchange}:{symbol}: {timestamp_ms}")
-                    
-                    print(f"📅 Loaded {len(self.cached_inception_dates[exchange])} inception dates for {exchange}")
-        except Exception as e:
-            print(f"Warning: Could not load cached inception dates: {e}")
-    
-    def get_inception_date(self, exchange: str, symbol: str) -> Optional[str]:
-        """Get inception date for a symbol, preferring cached data."""
-        # First try cached data
-        if exchange in self.cached_inception_dates and symbol in self.cached_inception_dates[exchange]:
-            return self.cached_inception_dates[exchange][symbol]
-        
-        # Fall back to hardcoded dates
-        return self.fallback_inception_dates.get(symbol)
-    
-    def add_issue(self, severity: str, category: str, message: str, details: Dict[str, Any] = None):
-        """Add an issue to the findings."""
+    def add_issue(self, severity: str, category: str, message: str, fix_commands: List[str] = None):
+        """Add an issue with optional fix commands."""
+        if self.critical_only and severity != 'critical':
+            return
+            
         issue = {
             'category': category,
             'message': message,
-            'details': details or {},
+            'fix_commands': fix_commands or [],
             'timestamp': datetime.now().isoformat()
         }
         self.issues[severity].append(issue)
     
-    def apply_fix(self, fix_type: str, fix_command: str, description: str) -> bool:
-        """Apply a fix by running a command."""
-        if not self.auto_fix:
+    def apply_fix(self, description: str, commands: List[str]) -> bool:
+        """Apply a fix by running commands."""
+        if not self.auto_fix or not commands:
             return False
-            
-        try:
-            print(f"🔧 Applying fix: {description}")
-            # Set working directory to the project root directory
-            script_dir = os.path.dirname(os.path.abspath(__file__))  # .../backtester/data/health_check
-            backtester_root = os.path.dirname(os.path.dirname(script_dir))  # .../backtester
-            project_root = os.path.dirname(backtester_root)  # .../
-            
-            result = subprocess.run(fix_command, shell=True, capture_output=True, text=True, cwd=project_root)
-            
-            if result.returncode == 0:
-                self.fixes_applied.append({
-                    'type': fix_type,
-                    'command': fix_command,
-                    'description': description,
-                    'success': True,
-                    'output': result.stdout
-                })
-                print(f"   ✅ Fix applied successfully")
-                return True
-            else:
-                self.fixes_applied.append({
-                    'type': fix_type,
-                    'command': fix_command,
-                    'description': description,
-                    'success': False,
-                    'error': result.stderr
-                })
-                print(f"   ❌ Fix failed: {result.stderr}")
-                return False
+        
+        print(f"🔧 Applying fix: {description}")
+        
+        success_count = 0
+        for cmd in commands:
+            try:
+                # Set working directory to project root
+                project_root = Path(__file__).parent.parent.parent.parent
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True, cwd=project_root)
                 
-        except Exception as e:
-            print(f"   ❌ Error applying fix: {e}")
-            return False
+                if result.returncode == 0:
+                    print(f"   ✅ Command successful: {cmd[:50]}...")
+                    success_count += 1
+                else:
+                    print(f"   ❌ Command failed: {cmd[:50]}...")
+                    print(f"      Error: {result.stderr[:100]}")
+                    
+            except Exception as e:
+                print(f"   ❌ Exception running command: {e}")
+        
+        # Record the fix attempt
+        self.fixes_applied.append({
+            'description': description,
+            'commands': commands,
+            'success_count': success_count,
+            'total_commands': len(commands),
+            'success': success_count == len(commands)
+        })
+        
+        return success_count == len(commands)
     
-    def check_date_gaps(self, data: vbt.Data, filename: str, expected_freq: str, exchange: str = None, market_type: str = None) -> List[Dict]:
-        """Check for gaps in the date sequence."""
-        gaps = []
+    def check_data_gaps(self, data: vbt.Data, exchange: str, market: str, timeframe: str) -> Dict[str, Any]:
+        """Check for critical data gaps and provide realistic solutions."""
+        gap_info = {'critical_gaps': [], 'minor_gaps': [], 'total_missing': 0}
         
         try:
-            # Get the index (timestamps)
-            index = data.wrapper.index
+            # Extract OHLCV for gap analysis
+            ohlcv = VBTDataHandler.extract_ohlcv(data)
+            if not ohlcv or 'close' not in ohlcv:
+                return gap_info
             
-            if len(index) < 2:
-                self.add_issue('warning', 'insufficient_data', 
-                             f"{filename}: Less than 2 data points", 
-                             {'data_points': len(index)})
-                return gaps
+            close_df = ohlcv['close']
+            tf_minutes = FreshnessChecker.parse_timeframe_minutes(timeframe)
             
-            # Convert expected frequency to pandas frequency
-            freq_map = {
-                '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min',
-                '1h': '1h', '2h': '2h', '4h': '4h', '6h': '6h', '8h': '8h', '12h': '12h',
-                '1d': '1D', '3d': '3D', '1w': '1W', '1M': '1M'
-            }
+            # Define realistic gap thresholds based on timeframe and data span
+            total_symbols = len(close_df.columns)
             
-            pandas_freq = freq_map.get(expected_freq, expected_freq)
+            # Calculate expected timespan to set realistic thresholds
+            if len(close_df.index) > 0:
+                total_days = (close_df.index[-1] - close_df.index[0]).days
+                # For longer timespans, allow more tolerance for gaps
+                if total_days > 365:  # More than 1 year of data
+                    # Be more lenient - crypto markets have natural gaps
+                    critical_threshold = max(5000, total_days * 2)  # ~2 periods per day as critical
+                    minor_threshold = max(1000, total_days * 0.5)   # ~0.5 periods per day as minor
+                else:
+                    # Shorter timespan - be more strict
+                    critical_threshold = 2000
+                    minor_threshold = 500
+            else:
+                # Fallback thresholds
+                critical_threshold = 5000
+                minor_threshold = 1000
             
-            # Create expected date range
-            expected_range = pd.date_range(
-                start=index[0], 
-                end=index[-1], 
-                freq=pandas_freq
-            )
-            
-            # Find missing dates
-            missing_dates = expected_range.difference(index)
-            
-            if len(missing_dates) > 0:
-                # Group consecutive missing dates into gaps
-                if len(missing_dates) > 0:
-                    missing_df = pd.DataFrame({'missing': missing_dates}).sort_values('missing')
-                    missing_df['group'] = (missing_df['missing'].diff() > pd.Timedelta(pandas_freq)).cumsum()
+            # Check each symbol for gaps
+            for symbol in close_df.columns:
+                symbol_data = close_df[symbol].dropna()
+                if len(symbol_data) < 2:
+                    continue
+                
+                # Calculate expected vs actual data points
+                time_span = symbol_data.index[-1] - symbol_data.index[0]
+                expected_periods = int(time_span.total_seconds() / (tf_minutes * 60)) + 1
+                actual_periods = len(symbol_data)
+                missing_periods = expected_periods - actual_periods
+                
+                if missing_periods > 0:
+                    gap_info['total_missing'] += missing_periods
                     
-                    for group_id, group in missing_df.groupby('group'):
-                        gap_start = group['missing'].iloc[0]
-                        gap_end = group['missing'].iloc[-1]
-                        gap_count = len(group)
-                        
-                        gap_info = {
-                            'start': gap_start,
-                            'end': gap_end,
-                            'duration': gap_end - gap_start,
-                            'missing_points': gap_count,
-                            'frequency': expected_freq
-                        }
-                        gaps.append(gap_info)
-                        
-                        severity = 'critical' if gap_count > 24 else 'warning'
-                        self.add_issue(severity, 'date_gaps',
-                                     f"{filename}: Data gap from {gap_start} to {gap_end} ({gap_count} missing points)",
-                                     gap_info)
-                        
-                        # Auto-fix for critical gaps
-                        if severity == 'critical' and exchange and market_type:
-                            symbols = list(data.symbols) if hasattr(data, 'symbols') else []
-                            if symbols:
-                                # Construct fix command to re-fetch the gap period
-                                symbol_list = ','.join(symbols[:5])  # Limit to first 5 symbols
-                                fix_cmd = f"python backtester/scripts/fetch_data_cli.py --exchange {exchange} --market {market_type} --timeframe {expected_freq} --symbols {symbol_list} --start {gap_start.strftime('%Y-%m-%d')} --end {gap_end.strftime('%Y-%m-%d')}"
-                                self.apply_fix('gap_fill', fix_cmd, f"Fill data gap from {gap_start.date()} to {gap_end.date()}")
+                    # Calculate completion rate for context
+                    completion_rate = actual_periods / expected_periods if expected_periods > 0 else 1.0
+                    
+                    # Categorize gaps using dynamic thresholds
+                    if missing_periods > critical_threshold:
+                        gap_info['critical_gaps'].append({
+                            'symbol': symbol,
+                            'missing_periods': missing_periods,
+                            'start_date': symbol_data.index[0],
+                            'end_date': symbol_data.index[-1],
+                            'completion_rate': completion_rate
+                        })
+                    elif missing_periods > minor_threshold:
+                        gap_info['minor_gaps'].append({
+                            'symbol': symbol,
+                            'missing_periods': missing_periods,
+                            'completion_rate': completion_rate
+                        })
             
-            # Check for duplicate timestamps
-            duplicates = index.duplicated()
-            if duplicates.any():
-                dup_count = duplicates.sum()
-                dup_dates = index[duplicates].unique()
-                self.add_issue('critical', 'duplicate_timestamps',
-                             f"{filename}: {dup_count} duplicate timestamps found",
-                             {'duplicate_dates': [str(d) for d in dup_dates[:10]]})  # Show first 10
-                             
+            # Add issues and fixes for critical gaps only
+            if gap_info['critical_gaps']:
+                critical_symbols = [g['symbol'] for g in gap_info['critical_gaps'][:5]]  # Limit to 5 symbols
+                symbol_list = ','.join(critical_symbols)
+                
+                fix_commands = [
+                    f"python backtester/scripts/fetch_data_cli.py --exchange {exchange} --market {market} --timeframe {timeframe} --symbols {symbol_list} --inception"
+                ]
+                
+                avg_missing = gap_info['total_missing'] // len(gap_info['critical_gaps'])
+                completion_rates = [g['completion_rate'] for g in gap_info['critical_gaps']]
+                avg_completion = sum(completion_rates) / len(completion_rates) * 100
+                
+                self.add_issue(
+                    'critical', 
+                    'data_gaps',
+                    f"{exchange}/{market}/{timeframe}: {len(gap_info['critical_gaps'])} symbols with major gaps (avg {avg_missing} missing, {avg_completion:.1f}% complete)",
+                    fix_commands
+                )
+                
+                # Apply fix if auto-fix enabled
+                if self.auto_fix:
+                    self.apply_fix(f"Fill critical gaps for {len(critical_symbols)} symbols", fix_commands)
+            
+            elif gap_info['minor_gaps']:
+                avg_missing = gap_info['total_missing'] // len(gap_info['minor_gaps']) if gap_info['minor_gaps'] else 0
+                
+                # Offer interpolation for minor gaps if enabled
+                if self.enable_interpolation and self.auto_fix and gap_info['total_missing'] <= 10000:
+                    self.add_issue(
+                        'warning',
+                        'data_gaps', 
+                        f"{exchange}/{market}/{timeframe}: {len(gap_info['minor_gaps'])} symbols with minor gaps (avg {avg_missing} missing periods) - attempting interpolation",
+                        [f"Interpolate using {self.interpolation_strategy} strategy"]
+                    )
+                    
+                    # Apply interpolation fix
+                    if self.apply_interpolation_fix(data, exchange, market, timeframe, {}, gap_info):
+                        print(f"   🔧 Applied interpolation fix for minor gaps")
+                        self.apply_fix(f"Interpolate {gap_info['total_missing']} missing periods", 
+                                     [f"Applied {self.interpolation_strategy} interpolation"])
+                        return gap_info  # Return updated gap info
+                else:
+                    self.add_issue(
+                        'warning',
+                        'data_gaps', 
+                        f"{exchange}/{market}/{timeframe}: {len(gap_info['minor_gaps'])} symbols with minor gaps (avg {avg_missing} missing periods)"
+                    )
+            
         except Exception as e:
-            self.add_issue('critical', 'analysis_error',
-                         f"{filename}: Error checking date gaps: {e}")
+            self.add_issue('critical', 'analysis_error', f"Gap analysis failed for {exchange}/{market}/{timeframe}: {e}")
         
-        return gaps
+        return gap_info
     
-    def check_data_freshness(self, data: vbt.Data, filename: str, exchange: str = None, market_type: str = None, timeframe: str = None) -> Dict:
-        """Check if data is up-to-date (latest candle should be recent)."""
+    def check_data_freshness(self, data: vbt.Data, exchange: str, market: str, timeframe: str) -> Dict[str, Any]:
+        """Check data freshness with realistic update strategies."""
         freshness_info = {}
         
         try:
-            data_end = data.wrapper.index[-1]
-            now = pd.Timestamp.now(tz=data_end.tz if data_end.tz else 'UTC')
-            
-            # Calculate time difference
-            time_diff = now - data_end
-            hours_behind = time_diff.total_seconds() / 3600
+            start_date, end_date = VBTDataHandler.get_date_range(data)
+            now = datetime.now()
+            age_hours = (now - end_date.replace(tzinfo=None)).total_seconds() / 3600
             
             freshness_info = {
-                'latest_timestamp': data_end,
-                'current_time': now,
-                'hours_behind': hours_behind
+                'latest_data': end_date,
+                'age_hours': age_hours,
+                'is_stale': False
             }
             
-            # Determine if data is stale
-            if timeframe:
-                # Define acceptable staleness based on timeframe
-                staleness_thresholds = {
-                    '1m': 2, '5m': 6, '15m': 12, '30m': 24,
-                    '1h': 3, '2h': 6, '4h': 12, '6h': 18, '8h': 24, '12h': 36,
-                    '1d': 48, '3d': 96, '1w': 168
-                }
+            # Define staleness thresholds based on timeframe
+            staleness_map = {
+                '1m': 2, '5m': 6, '15m': 12, '30m': 24,
+                '1h': 6, '2h': 12, '4h': 24, '6h': 36, '8h': 48, '12h': 72,
+                '1d': 48, '3d': 96, '1w': 168
+            }
+            
+            threshold = staleness_map.get(timeframe, 24)
+            
+            if age_hours > threshold:
+                freshness_info['is_stale'] = True
+                severity = 'critical' if age_hours > threshold * 2 else 'warning'
                 
-                threshold = staleness_thresholds.get(timeframe, 24)  # Default to 24 hours
+                # Get top symbols for update
+                symbols = list(data.symbols)[:10] if hasattr(data, 'symbols') else []
+                symbol_list = ','.join(symbols)
                 
-                if hours_behind > threshold:
-                    severity = 'critical' if hours_behind > threshold * 2 else 'warning'
-                    self.add_issue(severity, 'stale_data',
-                                 f"{filename}: Data is {hours_behind:.1f} hours behind (threshold: {threshold}h)",
-                                 freshness_info)
-                    
-                    # Auto-fix for stale data
-                    if severity == 'critical' and exchange and market_type and timeframe:
-                        symbols = list(data.symbols) if hasattr(data, 'symbols') else []
-                        if symbols:
-                            symbol_list = ','.join(symbols[:10])  # Limit to first 10 symbols
-                            fix_cmd = f"python backtester/scripts/fetch_data_cli.py --exchange {exchange} --market {market_type} --timeframe {timeframe} --symbols {symbol_list} --end now"
-                            self.apply_fix('update_stale', fix_cmd, f"Update stale data (behind by {hours_behind:.1f} hours)")
-                            
+                fix_commands = [
+                    f"python backtester/scripts/fetch_data_cli.py --exchange {exchange} --market {market} --timeframe {timeframe} --symbols {symbol_list} --end now"
+                ]
+                
+                self.add_issue(
+                    severity,
+                    'stale_data',
+                    f"{exchange}/{market}/{timeframe}: Data is {age_hours:.1f} hours stale (threshold: {threshold}h)",
+                    fix_commands
+                )
+                
+                # Apply fix for critical staleness
+                if severity == 'critical' and self.auto_fix:
+                    self.apply_fix(f"Update stale {timeframe} data", fix_commands)
+        
         except Exception as e:
-            self.add_issue('critical', 'analysis_error',
-                         f"{filename}: Error checking data freshness: {e}")
+            self.add_issue('critical', 'analysis_error', f"Freshness check failed: {e}")
         
         return freshness_info
     
-    def check_inception_coverage(self, data: vbt.Data, filename: str, exchange: str = None, market_type: str = None, timeframe: str = None) -> Dict:
-        """Check if data covers expected inception dates using cached data."""
-        inception_issues = {}
+    def check_cache_integrity(self) -> Dict[str, Any]:
+        """Check cache system integrity."""
+        integrity_info = {'exchanges': [], 'issues': []}
         
         try:
-            data_start = data.wrapper.index[0]
+            # Check cache statistics
+            cache_stats = self.cache_manager.get_cache_stats()
             
-            # Extract symbols from data
-            symbols = data.symbols if hasattr(data, 'symbols') else []
-            
-            for symbol in symbols:
-                inception_date_str = self.get_inception_date(exchange, symbol)
-                if inception_date_str:
-                    expected_inception = pd.Timestamp(inception_date_str)
+            for exchange in cache_stats['exchanges']:
+                exchange_stats = cache_stats['by_exchange'][exchange]
+                
+                # Check for missing volume cache
+                if not self.cache_manager.is_volume_cache_fresh(exchange):
+                    fix_commands = [f"python backtester/scripts/fetch_data_cli.py --exchange {exchange} --top 20"]
+                    self.add_issue(
+                        'warning',
+                        'cache_stale',
+                        f"{exchange}: Volume cache is stale or missing",
+                        fix_commands
+                    )
                     
-                    # Ensure both timestamps are timezone-aware for comparison
-                    if data_start.tz is None and expected_inception.tz is not None:
-                        data_start = data_start.tz_localize('UTC')
-                    elif data_start.tz is not None and expected_inception.tz is None:
-                        expected_inception = expected_inception.tz_localize('UTC')
-                    
-                    # Allow some tolerance (e.g., within a week)
-                    tolerance = pd.Timedelta(days=7)
-                    
-                    if data_start > (expected_inception + tolerance):
-                        missing_days = (data_start - expected_inception).days
-                        inception_issues[symbol] = {
-                            'expected_inception': expected_inception,
-                            'actual_start': data_start,
-                            'missing_days': missing_days
-                        }
-                        
-                        severity = 'critical' if missing_days > 365 else 'warning'  # More than a year is critical
-                        self.add_issue(severity, 'inception_coverage',
-                                     f"{filename}: {symbol} missing {missing_days} days from inception "
-                                     f"(expected: {expected_inception.date()}, actual: {data_start.date()})",
-                                     inception_issues[symbol])
-                        
-                        # Auto-fix for missing inception data
-                        if severity == 'critical' and exchange and market_type and timeframe:
-                            fix_cmd = f"python backtester/scripts/fetch_data_cli.py --exchange {exchange} --market {market_type} --timeframe {timeframe} --symbols {symbol} --start {expected_inception.strftime('%Y-%m-%d')} --end {data_start.strftime('%Y-%m-%d')}"
-                            self.apply_fix('inception_fill', fix_cmd, f"Fill missing inception data for {symbol} ({missing_days} days)")
+                    # Auto-fix stale volume cache (reasonable warning-level fix)
+                    if self.auto_fix:
+                        self.apply_fix(f"Refresh volume cache for {exchange}", fix_commands)
+                
+                # Check for excessive failed symbols
+                failed_count = exchange_stats['failed_symbols']
+                if failed_count > 10:
+                    self.add_issue(
+                        'warning',
+                        'failed_symbols',
+                        f"{exchange}: {failed_count} symbols marked as failed"
+                    )
+                
+                integrity_info['exchanges'].append({
+                    'exchange': exchange,
+                    'volume_symbols': exchange_stats['volume_symbols'],
+                    'timestamp_symbols': exchange_stats['timestamp_symbols'],
+                    'failed_symbols': failed_count,
+                    'volume_fresh': exchange_stats['volume_cache_fresh']
+                })
         
         except Exception as e:
-            self.add_issue('critical', 'analysis_error',
-                         f"{filename}: Error checking inception coverage: {e}")
+            self.add_issue('critical', 'cache_error', f"Cache integrity check failed: {e}")
         
-        return inception_issues
+        return integrity_info
     
-    def check_data_completeness(self, data: vbt.Data, filename: str) -> Dict:
-        """Check for missing values and data completeness."""
-        completeness_info = {}
+    def analyze_storage_file(self, file_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze a single storage file for health issues."""
+        exchange = file_info['exchange']
+        market = file_info['market']
+        timeframe = file_info['timeframe']
         
-        try:
-            # Handle VBT Data objects properly
-            if not hasattr(data, 'wrapper') or not hasattr(data.wrapper, 'index'):
-                self.add_issue('warning', 'data_access_limited',
-                             f"{filename}: Cannot access VBT data structure properly")
-                return completeness_info
-            
-            # Get basic info
-            total_timesteps = len(data.wrapper.index)
-            total_symbols = len(data.symbols) if hasattr(data, 'symbols') else 0
-            
-            if total_symbols == 0:
-                self.add_issue('warning', 'no_symbols',
-                             f"{filename}: No symbols found in data")
-                return completeness_info
-            
-            # For VBT Data, check if we have OHLCV attributes
-            has_ohlcv = all(hasattr(data, attr) for attr in ['open', 'high', 'low', 'close', 'volume'])
-            
-            if has_ohlcv:
-                # VBT Data with OHLCV attributes
-                completeness_info = {
-                    'data_type': 'VBT_OHLCV',
-                    'total_symbols': total_symbols,
-                    'total_timesteps': total_timesteps,
-                    'has_all_ohlcv': True
-                }
-                
-                # Check for NaN values in each OHLCV component
-                total_cells = 0
-                nan_cells = 0
-                
-                for attr in ['open', 'high', 'low', 'close', 'volume']:
-                    if hasattr(data, attr):
-                        attr_data = getattr(data, attr)
-                        if attr_data is not None and hasattr(attr_data, 'values'):
-                            values = attr_data.values
-                            if values is not None:
-                                attr_total = values.size
-                                attr_nan = np.isnan(values).sum() if hasattr(np, 'isnan') else 0
-                                
-                                total_cells += attr_total
-                                nan_cells += attr_nan
-                                
-                                completeness_info[f'{attr}_cells'] = attr_total
-                                completeness_info[f'{attr}_nan'] = attr_nan
-                            else:
-                                completeness_info[f'{attr}_cells'] = 0
-                                completeness_info[f'{attr}_nan'] = 0
-                        else:
-                            # Attribute exists but is None or has no values
-                            completeness_info[f'{attr}_status'] = 'None or no values'
-                
-                if total_cells > 0:
-                    completeness_percentage = ((total_cells - nan_cells) / total_cells) * 100
-                    completeness_info.update({
-                        'total_cells': total_cells,
-                        'nan_cells': nan_cells,
-                        'completeness_percentage': completeness_percentage
-                    })
-                    
-                    if completeness_percentage < 95:
-                        severity = 'critical' if completeness_percentage < 90 else 'warning'
-                        self.add_issue(severity, 'data_completeness',
-                                     f"{filename}: Data completeness {completeness_percentage:.1f}% "
-                                     f"({nan_cells:,} NaN values out of {total_cells:,} cells)",
-                                     completeness_info)
-                
-                # Basic OHLC validation (check if high >= low)
-                try:
-                    if hasattr(data, 'high') and hasattr(data, 'low'):
-                        high_attr = getattr(data, 'high')
-                        low_attr = getattr(data, 'low')
-                        
-                        # Check if the attributes are not None and have values
-                        if (high_attr is not None and hasattr(high_attr, 'values') and 
-                            low_attr is not None and hasattr(low_attr, 'values')):
-                            
-                            high_vals = high_attr.values
-                            low_vals = low_attr.values
-                            
-                            if high_vals is not None and low_vals is not None and high_vals.shape == low_vals.shape:
-                                invalid_prices = (high_vals < low_vals).sum()
-                                if invalid_prices > 0:
-                                    self.add_issue('critical', 'invalid_ohlc',
-                                                 f"{filename}: {invalid_prices} instances where High < Low")
-                        else:
-                            # OHLC attributes exist but are None or don't have values
-                            self.add_issue('warning', 'ohlc_access_limited',
-                                         f"{filename}: OHLC attributes exist but cannot access values")
-                except Exception as e:
-                    self.add_issue('warning', 'ohlc_validation_error',
-                                 f"{filename}: Could not validate OHLC relationships: {e}")
-                                 
-            else:
-                # Try to get data as DataFrame (fallback)
-                try:
-                    df = data.get()
-                    if df is not None and hasattr(df, 'shape'):
-                        completeness_info = {
-                            'data_type': 'DataFrame',
-                            'total_symbols': total_symbols,
-                            'total_timesteps': total_timesteps,
-                            'df_shape': df.shape,
-                            'has_all_ohlcv': False
-                        }
-                        
-                        # Check DataFrame completeness
-                        total_cells = df.size
-                        nan_cells = df.isna().sum().sum() if hasattr(df, 'isna') else 0
-                        completeness_percentage = ((total_cells - nan_cells) / total_cells) * 100 if total_cells > 0 else 100
-                        
-                        completeness_info.update({
-                            'total_cells': total_cells,
-                            'nan_cells': nan_cells,
-                            'completeness_percentage': completeness_percentage
-                        })
-                        
-                        if completeness_percentage < 95:
-                            severity = 'critical' if completeness_percentage < 90 else 'warning'
-                            self.add_issue(severity, 'data_completeness',
-                                         f"{filename}: Data completeness {completeness_percentage:.1f}% "
-                                         f"({nan_cells:,} NaN values out of {total_cells:,} cells)",
-                                         completeness_info)
-                    else:
-                        self.add_issue('warning', 'data_access_error',
-                                     f"{filename}: Cannot access data as DataFrame")
-                        completeness_info = {
-                            'data_type': 'Unknown',
-                            'total_symbols': total_symbols,
-                            'total_timesteps': total_timesteps,
-                            'has_all_ohlcv': False
-                        }
-                except Exception as e:
-                    self.add_issue('warning', 'data_access_error',
-                                 f"{filename}: Error accessing data structure: {e}")
-                    completeness_info = {
-                        'data_type': 'AccessError',
-                        'total_symbols': total_symbols,
-                        'total_timesteps': total_timesteps,
-                        'error': str(e)
-                    }
-                                 
-        except Exception as e:
-            self.add_issue('critical', 'analysis_error',
-                         f"{filename}: Error checking data completeness: {e}")
+        print(f"📊 Analyzing {exchange}/{market}/{timeframe}...")
         
-        return completeness_info
-    
-    def check_symbol_consistency(self, data: vbt.Data, filename: str) -> Dict:
-        """Check for symbol-specific issues."""
-        symbol_info = {}
-        
-        try:
-            symbols = data.symbols if hasattr(data, 'symbols') else []
-            
-            if not symbols:
-                self.add_issue('warning', 'no_symbols',
-                             f"{filename}: No symbols detected in data")
-                return symbol_info
-            
-            # For VBT Data objects, analyze symbol coverage
-            if hasattr(data, 'wrapper') and hasattr(data.wrapper, 'index'):
-                total_timesteps = len(data.wrapper.index)
-                
-                if len(symbols) > 1:
-                    # Check symbol-specific data coverage using VBT structure
-                    for symbol in symbols:
-                        try:
-                            # For VBT data, check if we can access symbol-specific data
-                            symbol_data_points = 0
-                            missing_points = 0
-                            
-                            # Try to get close data for this symbol as a proxy for data availability
-                            if hasattr(data, 'close') and hasattr(data.close, '__getitem__'):
-                                try:
-                                    symbol_close = data.close[symbol] if symbol in data.close.columns else None
-                                    if symbol_close is not None and hasattr(symbol_close, 'dropna'):
-                                        valid_data = symbol_close.dropna()
-                                        symbol_data_points = len(valid_data)
-                                        missing_points = total_timesteps - symbol_data_points
-                                        
-                                        symbol_info[symbol] = {
-                                            'start_date': str(valid_data.index[0]) if len(valid_data) > 0 else None,
-                                            'end_date': str(valid_data.index[-1]) if len(valid_data) > 0 else None,
-                                            'data_points': symbol_data_points,
-                                            'missing_points': missing_points,
-                                            'total_expected': total_timesteps
-                                        }
-                                    else:
-                                        # Symbol exists but no valid data found
-                                        symbol_info[symbol] = {
-                                            'start_date': None,
-                                            'end_date': None,
-                                            'data_points': 0,
-                                            'missing_points': total_timesteps,
-                                            'total_expected': total_timesteps
-                                        }
-                                        self.add_issue('warning', 'symbol_no_data',
-                                                     f"{filename}: Symbol {symbol} has no valid data")
-                                except KeyError:
-                                    # Symbol not found in close data
-                                    symbol_info[symbol] = {
-                                        'start_date': None,
-                                        'end_date': None,
-                                        'data_points': 0,
-                                        'missing_points': total_timesteps,
-                                        'total_expected': total_timesteps
-                                    }
-                                    self.add_issue('warning', 'symbol_not_found',
-                                                 f"{filename}: Symbol {symbol} not found in close data")
-                                except Exception as e:
-                                    self.add_issue('warning', 'symbol_access_error',
-                                                 f"{filename}: Error accessing symbol {symbol}: {e}")
-                            else:
-                                # No close data available - use basic info
-                                symbol_info[symbol] = {
-                                    'start_date': str(data.wrapper.index[0]) if total_timesteps > 0 else None,
-                                    'end_date': str(data.wrapper.index[-1]) if total_timesteps > 0 else None,
-                                    'data_points': total_timesteps,  # Assume full coverage
-                                    'missing_points': 0,
-                                    'total_expected': total_timesteps
-                                }
-                                
-                        except Exception as e:
-                            self.add_issue('warning', 'symbol_analysis_error',
-                                         f"{filename}: Error analyzing symbol {symbol}: {e}")
-                    
-                    # Check for significant differences in data coverage between symbols
-                    if len(symbol_info) > 1:
-                        data_points = [info['data_points'] for info in symbol_info.values() 
-                                     if info['data_points'] is not None and info['data_points'] > 0]
-                        if data_points:
-                            min_points = min(data_points)
-                            max_points = max(data_points)
-                            
-                            if len(data_points) > 1 and (max_points - min_points) > max_points * 0.1:  # More than 10% difference
-                                self.add_issue('warning', 'symbol_coverage_mismatch',
-                                             f"{filename}: Significant variation in symbol coverage "
-                                             f"({min_points} to {max_points} points)")
-                else:
-                    # Single symbol case
-                    symbol = symbols[0]
-                    symbol_info[symbol] = {
-                        'start_date': str(data.wrapper.index[0]) if total_timesteps > 0 else None,
-                        'end_date': str(data.wrapper.index[-1]) if total_timesteps > 0 else None,
-                        'data_points': total_timesteps,
-                        'missing_points': 0,
-                        'total_expected': total_timesteps
-                    }
-            else:
-                self.add_issue('warning', 'data_structure_limited',
-                             f"{filename}: Cannot analyze symbol consistency - limited data access")
-                             
-        except Exception as e:
-            self.add_issue('critical', 'analysis_error',
-                         f"{filename}: Error checking symbol consistency: {e}")
-        
-        return symbol_info
-    
-    def analyze_file(self, filepath: Path) -> Dict:
-        """Analyze a single data file."""
-        filename = filepath.name
-        file_info = {
-            'filepath': str(filepath),
-            'filename': filename,
-            'size_mb': filepath.stat().st_size / (1024 * 1024),
-            'modified': datetime.fromtimestamp(filepath.stat().st_mtime)
+        analysis = {
+            'file_info': file_info,
+            'has_data': False,
+            'symbol_count': 0,
+            'gaps': {},
+            'freshness': {},
+            'size_mb': file_info.get('file_size_bytes', 0) / (1024 * 1024),
+            'fixes_applied': []
         }
         
         try:
-            # Parse filename to extract metadata
-            base_name = filename.replace('.pickle.blosc', '').replace('.pickle', '')
-            parts = base_name.split('_')
-            if len(parts) >= 3:
-                exchange = parts[0]
-                market_type = parts[1] 
-                timeframe = parts[2]
-                
-                file_info.update({
-                    'exchange': exchange,
-                    'market_type': market_type,
-                    'timeframe': timeframe
-                })
-            
-            # Load the data
-            print(f"📊 Analyzing {filename}...")
-            
-            # Load data using VBT data storage system (handles compression automatically)
-            data = None
-            try:
-                if 'exchange' in file_info and 'timeframe' in file_info and 'market_type' in file_info:
-                    # Use the data storage system to load
-                    data = data_storage.load_data(
-                        file_info['exchange'], 
-                        file_info['timeframe'], 
-                        market_type=file_info['market_type']
-                    )
-                else:
-                    # Fallback to direct loading
-                    import pickle
-                    with open(filepath, 'rb') as f:
-                        data = pickle.load(f)
-            except Exception as e:
-                self.add_issue('critical', 'load_error',
-                             f"{filename}: Cannot load file: {e}")
-                return file_info
+            # Load data
+            data = data_storage.load_data(exchange, timeframe, market_type=market)
             
             if data is None:
-                self.add_issue('critical', 'empty_file',
-                             f"{filename}: File loaded but contains no data")
-                return file_info
+                self.add_issue('critical', 'load_error', f"Cannot load {exchange}/{market}/{timeframe}")
+                return analysis
             
-            # Basic file info
-            file_info.update({
-                'symbols': list(data.symbols) if hasattr(data, 'symbols') else [],
-                'symbol_count': len(data.symbols) if hasattr(data, 'symbols') else 0,
-                'data_shape': data.wrapper.shape if hasattr(data, 'wrapper') else None,
-                'date_range': (
-                    str(data.wrapper.index[0]), 
-                    str(data.wrapper.index[-1])
-                ) if hasattr(data, 'wrapper') and len(data.wrapper.index) > 0 else None
-            })
+            analysis['has_data'] = True
+            analysis['symbol_count'] = len(data.symbols) if hasattr(data, 'symbols') else 0
             
-            # Run health checks with auto-fix capabilities
-            exchange = file_info.get('exchange')
-            market_type = file_info.get('market_type')
-            timeframe = file_info.get('timeframe')
+            # Store initial fix count
+            initial_fix_count = len(self.fixes_applied)
             
-            # Check data freshness
-            freshness_info = self.check_data_freshness(data, filename, exchange, market_type, timeframe)
-            file_info['freshness'] = freshness_info
+            # Check data gaps (may apply fixes if auto-fix enabled)
+            analysis['gaps'] = self.check_data_gaps(data, exchange, market, timeframe)
             
-            # Check for date gaps
-            if timeframe:
-                gaps = self.check_date_gaps(data, filename, timeframe, exchange, market_type)
-                file_info['gaps'] = gaps
+            # Check if fixes were applied for this file
+            fixes_applied_count = len(self.fixes_applied) - initial_fix_count
+            if fixes_applied_count > 0 and self.auto_fix:
+                print(f"   🔄 Reloading data after {fixes_applied_count} fix(es)...")
+                
+                # Reload data to see improvements
+                data_reloaded = data_storage.load_data(exchange, timeframe, market_type=market)
+                if data_reloaded is not None:
+                    # Re-analyze gaps with fresh data
+                    analysis['gaps'] = self.check_data_gaps(data_reloaded, exchange, market, timeframe)
+                    data = data_reloaded  # Use reloaded data for freshness check
+                    analysis['fixes_applied'] = self.fixes_applied[-fixes_applied_count:]
+                    print(f"   ♻️  Data reloaded and re-analyzed")
             
-            # Check inception coverage
-            inception_issues = self.check_inception_coverage(data, filename, exchange, market_type, timeframe)
-            file_info['inception_issues'] = inception_issues
+            # Check freshness (using potentially reloaded data)
+            analysis['freshness'] = self.check_data_freshness(data, exchange, market, timeframe)
             
-            # Check data completeness
-            completeness_info = self.check_data_completeness(data, filename)
-            file_info['completeness'] = completeness_info
-            
-            # Check symbol consistency
-            symbol_info = self.check_symbol_consistency(data, filename)
-            file_info['symbol_info'] = symbol_info
-            
-            print(f"   ✅ Analysis complete")
+            missing_count = analysis['gaps']['total_missing']
+            print(f"   ✅ {analysis['symbol_count']} symbols, {missing_count} missing periods")
             
         except Exception as e:
-            self.add_issue('critical', 'analysis_error',
-                         f"{filename}: Fatal error during analysis: {e}")
+            self.add_issue('critical', 'analysis_error', f"Analysis failed for {exchange}/{market}/{timeframe}: {e}")
             print(f"   ❌ Analysis failed: {e}")
         
-        return file_info
+        return analysis
     
-    def save_report(self, report: str, filename: str = None) -> Path:
-        """Save report to the reports directory."""
-        if filename is None:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"health_report_{timestamp}.txt"
+    def generate_report(self, analyses: List[Dict[str, Any]]) -> str:
+        """Generate focused health report with actionable recommendations."""
+        lines = []
+        lines.append("=" * 70)
+        lines.append("🔍 VBT DATA HEALTH CHECK")
+        lines.append("=" * 70)
+        lines.append(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"Files analyzed: {len(analyses)}")
+        lines.append(f"Auto-fix enabled: {'Yes' if self.auto_fix else 'No'}")
+        lines.append("")
         
+        # Summary
+        total_issues = sum(len(issues) for issues in self.issues.values())
+        lines.append("📋 ISSUE SUMMARY")
+        lines.append("-" * 40)
+        lines.append(f"🔴 Critical: {len(self.issues['critical'])}")
+        lines.append(f"🟡 Warning: {len(self.issues['warning'])}")
+        lines.append(f"ℹ️  Info: {len(self.issues['info'])}")
+        lines.append("")
+        
+        # Fixes applied
+        if self.fixes_applied:
+            lines.append("🔧 FIXES APPLIED")
+            lines.append("-" * 40)
+            for fix in self.fixes_applied:
+                status = "✅" if fix['success'] else "❌"
+                lines.append(f"{status} {fix['description']}")
+                lines.append(f"   Commands: {fix['success_count']}/{fix['total_commands']} successful")
+            lines.append("")
+        
+        # Critical issues first
+        if self.issues['critical']:
+            lines.append("🚨 CRITICAL ISSUES")
+            lines.append("-" * 40)
+            for issue in self.issues['critical']:
+                lines.append(f"• {issue['message']}")
+                if issue['fix_commands'] and not self.auto_fix:
+                    lines.append(f"  Fix: {issue['fix_commands'][0]}")
+            lines.append("")
+        
+        # Warnings (only if not critical-only mode)
+        if not self.critical_only and self.issues['warning']:
+            lines.append("⚠️  WARNING ISSUES")
+            lines.append("-" * 40)
+            for issue in self.issues['warning'][:5]:  # Limit to first 5
+                lines.append(f"• {issue['message']}")
+            
+            if len(self.issues['warning']) > 5:
+                lines.append(f"... and {len(self.issues['warning']) - 5} more warnings")
+            lines.append("")
+        
+        # Storage overview
+        if analyses:
+            lines.append("💾 STORAGE OVERVIEW")
+            lines.append("-" * 40)
+            total_size = sum(a.get('size_mb', 0) for a in analyses)
+            total_symbols = sum(a.get('symbol_count', 0) for a in analyses)
+            
+            lines.append(f"Total files: {len(analyses)}")
+            lines.append(f"Total size: {total_size:.1f} MB")
+            lines.append(f"Total symbols: {total_symbols}")
+            lines.append("")
+            
+            # Show files with issues
+            problem_files = [a for a in analyses if a['gaps']['critical_gaps'] or a['freshness'].get('is_stale', False)]
+            if problem_files:
+                lines.append("🚨 FILES WITH ISSUES")
+                lines.append("-" * 40)
+                for analysis in problem_files[:5]:
+                    info = analysis['file_info']
+                    lines.append(f"📄 {info['exchange']}/{info['market']}/{info['timeframe']}")
+                    if analysis['gaps']['critical_gaps']:
+                        lines.append(f"   Gaps: {len(analysis['gaps']['critical_gaps'])} symbols")
+                    if analysis['freshness'].get('is_stale', False):
+                        lines.append(f"   Stale: {analysis['freshness']['age_hours']:.1f}h old")
+                lines.append("")
+        
+        # Recommendations
+        lines.append("💡 RECOMMENDATIONS")
+        lines.append("-" * 40)
+        
+        if len(self.issues['critical']) > 0:
+            lines.append("🔴 IMMEDIATE ACTION REQUIRED:")
+            lines.append("  1. Run with --auto-fix to resolve critical issues automatically")
+            lines.append("  2. Check storage integrity and reload corrupted files")
+            lines.append("  3. Address data gaps for high-priority symbols")
+        elif len(self.issues['warning']) > 0:
+            lines.append("🟡 RECOMMENDED ACTIONS:")
+            lines.append("  1. Update stale data during low-activity periods")
+            lines.append("  2. Consider running gap fills for important symbols")
+            lines.append("  3. Monitor cache freshness regularly")
+            
+            # Check if there are minor gaps that could benefit from interpolation
+            has_minor_gaps = any('minor gaps' in issue['message'] for issue in self.issues['warning'])
+            if has_minor_gaps:
+                lines.append("  4. For minor gaps, consider interpolation:")
+                lines.append("     --interpolate --auto-fix (financial forward-fill)")
+                lines.append("     --interpolate --interpolation-strategy linear")
+        else:
+            lines.append("✅ DATA HEALTH IS GOOD!")
+            lines.append("  Your cached data appears to be in good condition.")
+            lines.append("  Continue regular monitoring and updates.")
+        
+        if total_issues > 0 and not self.auto_fix:
+            lines.append("")
+            lines.append("🔧 AUTO-FIX AVAILABLE:")
+            lines.append("  Run this script with --auto-fix to automatically resolve many issues.")
+        
+        # Quick commands
+        lines.append("")
+        lines.append("🚀 QUICK COMMANDS")
+        lines.append("-" * 40)
+        lines.append("# Check cache status:")
+        lines.append("python backtester/scripts/inspect_cache_cli.py")
+        lines.append("")
+        lines.append("# Update stale data:")
+        lines.append("python backtester/scripts/fetch_data_cli.py --exchange binance --top 10")
+        lines.append("")
+        lines.append("# Fill gaps from inception:")
+        lines.append("python backtester/scripts/fetch_data_cli.py --exchange binance --symbols BTC/USDT,ETH/USDT --inception")
+        lines.append("")
+        lines.append("# Interpolate minor gaps (financial strategy):")
+        lines.append("python -m backtester.data.health_check.data_healthcheck --interpolate --auto-fix")
+        lines.append("")
+        lines.append("# Interpolate with linear strategy:")
+        lines.append("python -m backtester.data.health_check.data_healthcheck --interpolate --interpolation-strategy linear --auto-fix")
+        lines.append("")
+        lines.append("🎯 GAP THRESHOLDS (DYNAMIC)")
+        lines.append("-" * 40)
+        lines.append("• Critical: >5000 missing periods for multi-year data")
+        lines.append("• Minor: >1000 missing periods (normal for crypto markets)")
+        lines.append("• Note: Thresholds scale with data timespan for realistic assessment")
+        lines.append("")
+        lines.append("📊 INTERPOLATION STRATEGIES")
+        lines.append("-" * 40)
+        lines.append("• financial_forward_fill: OHLC=last_close, Volume=0 (recommended)")
+        lines.append("• linear: Linear interpolation between known points")
+        lines.append("• time_aware: Time-weighted interpolation considering gaps")
+        lines.append("• Max gap size: 10,000 periods (~7 days of 1m data)")
+        
+        return "\n".join(lines)
+    
+    def save_report(self, report: str) -> Path:
+        """Save report to file."""
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"health_check_{timestamp}.txt"
         report_path = self.reports_dir / filename
+        
         with open(report_path, 'w') as f:
             f.write(report)
         
         return report_path
     
-    def generate_report(self, file_analyses: List[Dict]) -> str:
-        """Generate a comprehensive health check report."""
-        report = []
-        report.append("=" * 80)
-        report.append("🔍 DATA HEALTH CHECK REPORT")
-        report.append("=" * 80)
-        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        report.append(f"Files analyzed: {len(file_analyses)}")
-        report.append(f"Auto-fix enabled: {'Yes' if self.auto_fix else 'No'}")
-        report.append("")
+    def interpolate_missing_data(self, data: vbt.Data, exchange: str, market: str, timeframe: str, 
+                                strategy: str = 'financial_forward_fill') -> Optional[vbt.Data]:
+        """
+        Interpolate missing data points in time series with financial data-appropriate strategies.
         
-        # Cache system info
-        if self.cached_inception_dates:
-            report.append("📅 CACHED INCEPTION DATA")
-            report.append("-" * 40)
-            total_cached = sum(len(symbols) for symbols in self.cached_inception_dates.values())
-            report.append(f"Total cached inception dates: {total_cached}")
-            for exchange, symbols in self.cached_inception_dates.items():
-                report.append(f"  {exchange}: {len(symbols)} symbols")
-            report.append("")
-        
-        # Summary statistics
-        total_issues = sum(len(issues) for issues in self.issues.values())
-        report.append("📋 SUMMARY")
-        report.append("-" * 40)
-        report.append(f"🔴 Critical issues: {len(self.issues['critical'])}")
-        report.append(f"🟡 Warnings: {len(self.issues['warning'])}")
-        report.append(f"ℹ️  Info: {len(self.issues['info'])}")
-        report.append(f"📊 Total issues: {total_issues}")
-        
-        if self.fixes_applied:
-            successful_fixes = len([f for f in self.fixes_applied if f['success']])
-            report.append(f"🔧 Fixes applied: {successful_fixes}/{len(self.fixes_applied)}")
-        
-        report.append("")
-        
-        # Auto-fix summary
-        if self.fixes_applied:
-            report.append("🔧 AUTO-FIX SUMMARY")
-            report.append("-" * 40)
-            for fix in self.fixes_applied:
-                status = "✅" if fix['success'] else "❌"
-                report.append(f"{status} {fix['description']}")
-                if not fix['success'] and 'error' in fix:
-                    report.append(f"   Error: {fix['error']}")
-            report.append("")
-        
-        # File overview
-        if file_analyses:
-            report.append("📁 FILE OVERVIEW")
-            report.append("-" * 40)
-            total_size = sum(f.get('size_mb', 0) for f in file_analyses)
-            total_symbols = sum(f.get('symbol_count', 0) for f in file_analyses)
+        Args:
+            data: VBT Data object to interpolate
+            exchange: Exchange identifier
+            market: Market type
+            timeframe: Timeframe identifier  
+            strategy: Interpolation strategy ('financial_forward_fill', 'linear', 'time_aware')
             
-            report.append(f"Total storage: {total_size:.1f} MB")
-            report.append(f"Total symbols: {total_symbols}")
-            report.append("")
+        Returns:
+            Interpolated VBT Data object or None if interpolation fails
+        """
+        try:
+            # Extract OHLCV data
+            ohlcv = VBTDataHandler.extract_ohlcv(data)
+            if not ohlcv or 'close' not in ohlcv:
+                print(f"   ❌ Cannot interpolate: Missing OHLCV data")
+                return None
             
-            # Group by exchange and timeframe
-            by_exchange = {}
-            by_timeframe = {}
+            # Get the original symbols
+            symbols = list(data.symbols) if hasattr(data, 'symbols') else []
+            if not symbols:
+                print(f"   ❌ Cannot interpolate: No symbols found")
+                return None
             
-            for file_info in file_analyses:
-                exchange = file_info.get('exchange', 'unknown')
-                timeframe = file_info.get('timeframe', 'unknown')
-                
-                by_exchange[exchange] = by_exchange.get(exchange, 0) + 1
-                by_timeframe[timeframe] = by_timeframe.get(timeframe, 0) + 1
+            print(f"   🔄 Interpolating missing data using '{strategy}' strategy...")
             
-            report.append("   By Exchange:")
-            for exchange, count in sorted(by_exchange.items()):
-                report.append(f"     {exchange}: {count} files")
+            # Get the expected frequency for this timeframe
+            tf_minutes = FreshnessChecker.parse_timeframe_minutes(timeframe)
+            freq_map = {
+                1: '1min', 5: '5min', 15: '15min', 30: '30min',
+                60: '1H', 120: '2H', 240: '4H', 360: '6H', 480: '8H', 720: '12H',
+                1440: '1D', 4320: '3D', 10080: '1W'
+            }
+            pandas_freq = freq_map.get(tf_minutes, f'{tf_minutes}min')
             
-            report.append("   By Timeframe:")
-            for timeframe, count in sorted(by_timeframe.items()):
-                report.append(f"     {timeframe}: {count} files")
-            report.append("")
-        
-        # Issues by category
-        if total_issues > 0:
-            report.append("🚨 ISSUES FOUND")
-            report.append("-" * 40)
+            # Create complete time index
+            original_index = ohlcv['close'].index
+            if len(original_index) < 2:
+                print(f"   ❌ Insufficient data for interpolation")
+                return None
             
-            for severity in ['critical', 'warning', 'info']:
-                if self.issues[severity]:
-                    report.append(f"\n{severity.upper()} ISSUES ({len(self.issues[severity])}):")
+            # Generate complete time range
+            complete_index = pd.date_range(
+                start=original_index[0],
+                end=original_index[-1], 
+                freq=pandas_freq
+            )
+            
+            original_len = len(original_index)
+            complete_len = len(complete_index)
+            missing_count = complete_len - original_len
+            
+            if missing_count == 0:
+                print(f"   ✅ No missing periods found")
+                return data
+            
+            print(f"   📊 Original: {original_len} periods, Complete: {complete_len} periods (+{missing_count} interpolated)")
+            
+            # Interpolate each OHLCV component
+            interpolated_ohlcv = {}
+            for component in ['open', 'high', 'low', 'close', 'volume']:
+                if component not in ohlcv:
+                    continue
                     
-                    for issue in self.issues[severity]:
-                        report.append(f"  • {issue['message']}")
+                df = ohlcv[component]
+                
+                # Reindex to complete time range (creates NaN for missing periods)
+                reindexed = df.reindex(complete_index)
+                
+                if strategy == 'financial_forward_fill':
+                    # Financial-appropriate interpolation
+                    if component == 'volume':
+                        # Volume should be 0 during gaps (no trading)
+                        interpolated_ohlcv[component] = reindexed.fillna(0)
+                    else:
+                        # OHLC: Forward fill (last known price)
+                        # During gaps: Open=High=Low=Close=last_close, Volume=0
+                        filled = reindexed.ffill()
+                        interpolated_ohlcv[component] = filled
                         
-                        if self.detailed and issue['details']:
-                            for key, value in issue['details'].items():
-                                if isinstance(value, (list, dict)):
-                                    report.append(f"    {key}: {str(value)[:100]}...")
-                                else:
-                                    report.append(f"    {key}: {value}")
-        else:
-            report.append("✅ NO ISSUES FOUND")
-            report.append("All data files passed health checks!")
-        
-        # Detailed file information
-        if self.detailed and file_analyses:
-            report.append("\n" + "=" * 80)
-            report.append("📋 DETAILED FILE ANALYSIS")
-            report.append("=" * 80)
+                elif strategy == 'linear':
+                    # Linear interpolation for all components
+                    interpolated_ohlcv[component] = reindexed.interpolate(method='linear')
+                    
+                elif strategy == 'time_aware':
+                    # Time-aware interpolation considering time gaps
+                    interpolated_ohlcv[component] = reindexed.interpolate(method='time')
+                    
+                else:
+                    # Default to forward fill
+                    interpolated_ohlcv[component] = reindexed.ffill()
             
-            for file_info in file_analyses:
-                report.append(f"\n📄 {file_info['filename']}")
-                report.append(f"   Size: {file_info.get('size_mb', 0):.2f} MB")
-                report.append(f"   Modified: {file_info.get('modified', 'Unknown')}")
+            # Special handling for financial data consistency
+            if strategy == 'financial_forward_fill':
+                # Ensure OHLC consistency during interpolated periods
+                for symbol in symbols:
+                    # Find interpolated periods (where we added data)
+                    original_mask = interpolated_ohlcv['close'].index.isin(original_index)
+                    interpolated_mask = ~original_mask
+                    
+                    if interpolated_mask.any() and symbol in interpolated_ohlcv['close'].columns:
+                        # For interpolated periods: Open=High=Low=Close=previous_close
+                        prev_close = interpolated_ohlcv['close'][symbol].ffill()
+                        
+                        for component in ['open', 'high', 'low']:
+                            if component in interpolated_ohlcv and symbol in interpolated_ohlcv[component].columns:
+                                interpolated_ohlcv[component].loc[interpolated_mask, symbol] = prev_close[interpolated_mask]
+                        
+                        # Volume remains 0 for interpolated periods (already set above)
+            
+            # CRITICAL FIX: Create VBT Data using the correct symbol-based structure
+            try:
+                # Convert OHLCV-based structure to symbol-based structure
+                symbol_dict = {}
                 
-                if file_info.get('symbols'):
-                    report.append(f"   Symbols: {len(file_info['symbols'])} ({', '.join(file_info['symbols'][:5])}{'...' if len(file_info['symbols']) > 5 else ''})")
+                for symbol in symbols:
+                    # Create a DataFrame for this symbol with OHLCV as columns
+                    symbol_data = pd.DataFrame(index=interpolated_ohlcv['close'].index)
+                    
+                    # Add each OHLCV component as a column
+                    for component in ['open', 'high', 'low', 'close', 'volume']:
+                        if component in interpolated_ohlcv and symbol in interpolated_ohlcv[component].columns:
+                            # Capitalize column names for VBT convention
+                            symbol_data[component.capitalize()] = interpolated_ohlcv[component][symbol]
+                    
+                    # Only include symbols that have at least OHLC data
+                    if len(symbol_data.columns) >= 4:
+                        symbol_dict[symbol] = symbol_data
                 
-                if file_info.get('date_range'):
-                    report.append(f"   Date range: {file_info['date_range'][0]} to {file_info['date_range'][1]}")
+                if not symbol_dict:
+                    print(f"   ❌ No valid symbol data after interpolation")
+                    return None
                 
-                if file_info.get('data_shape'):
-                    report.append(f"   Shape: {file_info['data_shape']}")
+                # Create new VBT data object using the symbol-based structure
+                new_data = VBTDataHandler.create_from_dict(symbol_dict)
                 
-                if file_info.get('freshness'):
-                    hours_behind = file_info['freshness'].get('hours_behind', 0)
-                    report.append(f"   Freshness: {hours_behind:.1f} hours behind")
+                if new_data is None:
+                    print(f"   ❌ Failed to create VBT Data object from interpolated data")
+                    return None
                 
-                if file_info.get('gaps'):
-                    report.append(f"   Gaps: {len(file_info['gaps'])} found")
+                print(f"   ✅ Interpolation complete: +{missing_count} periods filled")
+                return new_data
                 
-                if file_info.get('completeness'):
-                    comp = file_info['completeness']
-                    report.append(f"   Completeness: {comp.get('completeness_percentage', 0):.1f}%")
-        
-        # Recommendations
-        report.append("\n" + "=" * 80)
-        report.append("💡 RECOMMENDATIONS")
-        report.append("=" * 80)
-        
-        if len(self.issues['critical']) > 0:
-            report.append("🔴 CRITICAL ACTIONS NEEDED:")
-            if not self.auto_fix:
-                report.append("  1. Run with --auto-fix to automatically resolve critical issues")
-            report.append("  2. Address critical data gaps - consider re-fetching affected periods")
-            report.append("  3. Fix invalid OHLCV data - these can affect calculations")
-            report.append("  4. Resolve loading errors - these files may be corrupted")
-        
-        if len(self.issues['warning']) > 0:
-            report.append("\n🟡 RECOMMENDED ACTIONS:")
-            report.append("  1. Consider filling minor data gaps")
-            report.append("  2. Review inception coverage for important symbols")
-            report.append("  3. Monitor zero volume periods")
-            report.append("  4. Update stale data regularly")
-        
-        if total_issues == 0:
-            report.append("🎉 DATA QUALITY EXCELLENT!")
-            report.append("  Your cached data appears to be in excellent condition.")
-            report.append("  Continue with regular monitoring and updates.")
-        
-        if not self.auto_fix and total_issues > 0:
-            report.append("\n🔧 AUTO-FIX AVAILABLE:")
-            report.append("  Run this script with --auto-fix to automatically resolve many issues.")
-            report.append("  This will execute commands to re-fetch missing data and update stale data.")
-        
-        return "\n".join(report)
+            except Exception as e:
+                print(f"   ❌ Failed to create VBT Data object: {e}")
+                import traceback
+                print(f"   Debug: {traceback.format_exc()}")
+                return None
+                
+        except Exception as e:
+            print(f"   ❌ Interpolation failed: {e}")
+            import traceback
+            print(f"   Debug: {traceback.format_exc()}")
+            return None
+    
+    def apply_interpolation_fix(self, data: vbt.Data, exchange: str, market: str, timeframe: str, 
+                               file_info: Dict[str, Any], gap_info: Dict[str, Any]) -> bool:
+        """Apply interpolation to fix data gaps and save the result."""
+        try:
+            # Only interpolate if gaps are reasonable in size
+            total_missing = gap_info.get('total_missing', 0)
+            if total_missing == 0:
+                return True
+                
+            # Don't interpolate massive gaps (likely data source issues)
+            if total_missing > 10000:  # More than ~7 days of 1m data
+                print(f"   ⚠️  Skipping interpolation: {total_missing} missing periods too large")
+                return False
+            
+            # Perform interpolation
+            interpolated_data = self.interpolate_missing_data(data, exchange, market, timeframe)
+            
+            if interpolated_data is None:
+                return False
+            
+            # Save interpolated data
+            success = data_storage.save_data(interpolated_data, exchange, timeframe, market)
+            
+            if success:
+                print(f"   💾 Saved interpolated data to storage")
+                return True
+            else:
+                print(f"   ❌ Failed to save interpolated data")
+                return False
+                
+        except Exception as e:
+            print(f"   ❌ Interpolation fix failed: {e}")
+            return False
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Analyze cached VBT data for quality issues",
+        description="Streamlined VBT data health check with realistic gap resolution",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s                              # Check all data
+  %(prog)s                              # Basic health check
+  %(prog)s --auto-fix                   # Check and fix issues automatically
   %(prog)s --exchange binance           # Check specific exchange
-  %(prog)s --timeframe 1h --detailed    # Check specific timeframe with details
-  %(prog)s --auto-fix                   # Check and automatically fix issues
+  %(prog)s --critical-only              # Show only critical issues
+  %(prog)s --detailed                   # Show detailed analysis
+  %(prog)s --interpolate --auto-fix     # Fill minor gaps with interpolation
+  %(prog)s --interpolate --interpolation-strategy linear  # Use linear interpolation
         """
     )
     
     parser.add_argument('--exchange', type=str,
-                      help='Filter by specific exchange (e.g., binance)')
+                      help='Check specific exchange only')
     parser.add_argument('--timeframe', type=str,
-                      help='Filter by specific timeframe (e.g., 1h, 1d)')
+                      help='Check specific timeframe only')
     parser.add_argument('--market', type=str, choices=['spot', 'swap'],
-                      help='Filter by market type')
+                      help='Check specific market type')
     parser.add_argument('--detailed', action='store_true',
-                      help='Show detailed analysis for each file')
+                      help='Show detailed analysis')
     parser.add_argument('--auto-fix', action='store_true',
-                      help='Automatically fix discovered issues')
-    parser.add_argument('--output', type=str,
-                      help='Save report to file (default: auto-generated in reports folder)')
+                      help='Automatically fix critical issues')
+    parser.add_argument('--interpolate', action='store_true',
+                      help='Enable interpolation to fill minor data gaps')
+    parser.add_argument('--interpolation-strategy', type=str, 
+                      choices=['financial_forward_fill', 'linear', 'time_aware'], 
+                      default='financial_forward_fill',
+                      help='Interpolation strategy for filling gaps (default: financial_forward_fill)')
+    parser.add_argument('--critical-only', action='store_true',
+                      help='Show only critical issues')
+    parser.add_argument('--save-report', action='store_true',
+                      help='Save report to file')
     
     args = parser.parse_args()
     
-    print("🔍 Starting Data Health Check...")
+    print("🔍 Starting Streamlined Data Health Check...")
     if args.auto_fix:
-        print("🔧 Auto-fix mode enabled - will attempt to resolve issues")
-    print("=" * 50)
+        if args.interpolate:
+            print(f"🔧 Auto-fix enabled with interpolation ({args.interpolation_strategy})")
+        else:
+            print("🔧 Auto-fix enabled - will resolve critical issues")
+    elif args.interpolate:
+        print(f"📊 Interpolation analysis enabled ({args.interpolation_strategy}) - use --auto-fix to apply")
+    if args.critical_only:
+        print("⚠️  Critical-only mode - focusing on urgent issues")
+    print("=" * 60)
     
-    # Initialize health checker
-    checker = DataHealthChecker(detailed=args.detailed, auto_fix=args.auto_fix)
+    # Initialize checker
+    checker = StreamlinedHealthChecker(
+        detailed=args.detailed,
+        auto_fix=args.auto_fix,
+        critical_only=args.critical_only,
+        enable_interpolation=args.interpolate,
+        interpolation_strategy=args.interpolation_strategy
+    )
     
-    # Get storage directory
-    storage_dir = Path(data_storage.storage_dir)
-    if not storage_dir.exists():
-        print(f"❌ Storage directory not found: {storage_dir}")
+    # Check cache integrity first
+    print("🔍 Checking cache integrity...")
+    checker.check_cache_integrity()
+    
+    # Get available data files
+    available_data = data_storage.list_available_data()
+    
+    if not available_data:
+        print("❌ No cached data found")
         return 1
-    
-    # Find data files
-    pickle_files = list(storage_dir.glob("*.pickle")) + list(storage_dir.glob("*.pickle.blosc"))
     
     # Filter files based on arguments
     filtered_files = []
-    for filepath in pickle_files:
-        filename = filepath.name
-        
-        # Parse filename: exchange_market_timeframe.pickle[.blosc]
-        base_name = filename.replace('.pickle.blosc', '').replace('.pickle', '')
-        parts = base_name.split('_')
-        if len(parts) < 3:
+    for file_info in available_data:
+        if args.exchange and file_info['exchange'] != args.exchange:
             continue
-            
-        exchange, market_type, timeframe = parts[0], parts[1], parts[2]
-        
-        # Apply filters
-        if args.exchange and exchange != args.exchange:
+        if args.timeframe and file_info['timeframe'] != args.timeframe:
             continue
-        if args.timeframe and timeframe != args.timeframe:
+        if args.market and file_info['market'] != args.market:
             continue
-        if args.market and market_type != args.market:
-            continue
-            
-        filtered_files.append(filepath)
+        filtered_files.append(file_info)
     
     if not filtered_files:
-        print("❌ No data files found matching criteria")
+        print("❌ No data files match the specified criteria")
         return 1
     
-    print(f"📁 Found {len(filtered_files)} data files to analyze")
+    print(f"📁 Analyzing {len(filtered_files)} data files...")
     print()
     
     # Analyze each file
-    file_analyses = []
-    for filepath in filtered_files:
-        try:
-            file_info = checker.analyze_file(filepath)
-            file_analyses.append(file_info)
-        except Exception as e:
-            print(f"❌ Failed to analyze {filepath.name}: {e}")
-            checker.add_issue('critical', 'analysis_error',
-                            f"Failed to analyze {filepath.name}: {e}")
+    analyses = []
+    for file_info in filtered_files:
+        analysis = checker.analyze_storage_file(file_info)
+        analyses.append(analysis)
     
     print()
-    print("=" * 50)
-    print("🔍 Analysis Complete - Generating Report...")
-    print()
+    print("=" * 60)
     
-    # Generate report
-    report = checker.generate_report(file_analyses)
+    # Generate and display report
+    report = checker.generate_report(analyses)
     
-    # Output report
-    if args.output:
-        report_path = checker.reports_dir / args.output
-        checker.save_report(report, args.output)
+    if args.save_report:
+        report_path = checker.save_report(report)
         print(f"📄 Report saved to: {report_path}")
     else:
-        # Auto-generate filename
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filters = []
-        if args.exchange:
-            filters.append(f"exchange_{args.exchange}")
-        if args.timeframe:
-            filters.append(f"timeframe_{args.timeframe}")
-        if args.market:
-            filters.append(f"market_{args.market}")
-        
-        filter_str = "_".join(filters)
-        filename = f"health_report_{filter_str}_{timestamp}.txt" if filter_str else f"health_report_{timestamp}.txt"
-        
-        report_path = checker.save_report(report, filename)
-        print(f"📄 Report saved to: {report_path}")
         print(report)
     
     # Return appropriate exit code
     if len(checker.issues['critical']) > 0:
-        return 2  # Critical issues found
+        return 2  # Critical issues
     elif len(checker.issues['warning']) > 0:
-        return 1  # Warnings found
+        return 1  # Warnings
     else:
         return 0  # All good
 

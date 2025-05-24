@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import vectorbtpro as vbt
 from backtester.data.storage.data_storage import data_storage
-from backtester.data.fetching.data_fetcher import fetch_data
+from backtester.data.fetching.data_fetcher_new import fetch_data
 
 def refresh_incomplete_ohlcv_data():
     """Refresh cached data that only has close prices instead of full OHLCV."""
@@ -128,20 +128,17 @@ def test_resampling_after_refresh():
     print("-" * 50)
     
     try:
-        # Try to resample 4h to 1d data
-        from backtester.data.fetching.storage_resampling import fetch_with_storage_resampling_fallback
+        # Try to resample 4h to 1d data using new core architecture
+        from backtester.data.fetching.core import CacheHandler
         
         test_symbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
         
-        result = fetch_with_storage_resampling_fallback(
+        # Use the new core cache handler for resampling test
+        cache_handler = CacheHandler('binance', '1d', 'spot')
+        result = cache_handler.try_load_from_lower_timeframe(
             symbols=test_symbols,
-            exchange_id='binance',
-            timeframe='1d',
-            start_date=None,
             end_date=None,
-            market_type='spot',
-            prefer_resampling=True,
-            is_inception_request=True
+            require_fresh=False
         )
         
         if result is not None:

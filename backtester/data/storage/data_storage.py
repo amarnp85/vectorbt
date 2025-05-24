@@ -149,6 +149,58 @@ class DataStorage:
             logger.error(f"Error getting date range: {e}")
             return None
     
+    def list_available_data(self) -> List[Dict[str, Any]]:
+        """List all available data files with metadata for cache inspection."""
+        available_data = []
+        
+        if not os.path.exists(self.storage_dir):
+            return available_data
+        
+        try:
+            for filename in os.listdir(self.storage_dir):
+                if filename.endswith('.pickle') or filename.endswith('.pickle.blosc'):
+                    filepath = os.path.join(self.storage_dir, filename)
+                    
+                    # Parse filename: exchange_market_timeframe.pickle(.blosc)
+                    if filename.endswith('.pickle.blosc'):
+                        parts = filename[:-13].split('_')  # Remove .pickle.blosc
+                        compression = 'blosc'
+                    else:
+                        parts = filename[:-7].split('_')  # Remove .pickle
+                        compression = 'none'
+                    
+                    if len(parts) >= 3:
+                        exchange = parts[0]
+                        market_type = parts[1]
+                        timeframe = '_'.join(parts[2:])
+                        
+                        # Get file size
+                        file_size_bytes = os.path.getsize(filepath)
+                        if file_size_bytes < 1024:
+                            file_size_str = f"{file_size_bytes} B"
+                        elif file_size_bytes < 1024 * 1024:
+                            file_size_str = f"{file_size_bytes / 1024:.1f} KB"
+                        else:
+                            file_size_str = f"{file_size_bytes / (1024 * 1024):.1f} MB"
+                        
+                        available_data.append({
+                            'exchange': exchange,
+                            'market': market_type,
+                            'timeframe': timeframe,
+                            'filename': filename,
+                            'filepath': filepath,
+                            'compression': compression,
+                            'file_size': file_size_str,
+                            'file_size_bytes': file_size_bytes
+                        })
+        
+        except Exception as e:
+            logger.error(f"Error listing available data: {e}")
+        
+        # Sort by exchange, then market, then timeframe
+        available_data.sort(key=lambda x: (x['exchange'], x['market'], x['timeframe']))
+        return available_data
+    
     def get_storage_summary(self) -> Dict[str, Any]:
         """Get comprehensive storage summary."""
         summary = {

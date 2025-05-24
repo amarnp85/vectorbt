@@ -19,10 +19,6 @@ setup(
     entry_points={
         'console_scripts': [
             'exchange-info=backtester.utilities.exchange_info:main',
-            'symbol-discovery=backtester.utilities.symbol_discovery_cli:main',
-            'symbol-metadata=backtester.utilities.symbol_metadata_cli:main',
-            'sync-symbols=backtester.utilities.sync_symbol_timestamps:main',
-            'data-fetcher=backtester.utilities.data_fetcher_cli:main',
         ],
     },
     author="Your Name",
