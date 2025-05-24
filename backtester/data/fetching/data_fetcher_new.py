@@ -189,4 +189,205 @@ def get_resampling_info() -> Dict[str, Any]:
         'supported_timeframes': TIMEFRAME_HIERARCHY,
         'resampling_type': 'pandas_based',
         'storage_summary': data_storage.get_storage_summary()
-    } 
+    }
+
+
+# Enhanced VBT Data Access Helpers
+def test_vbt_integration(data: vbt.Data) -> Dict[str, bool]:
+    """
+    Test VBT data integration points.
+    
+    Args:
+        data: VBT Data object to test
+        
+    Returns:
+        Dict with test results for each integration point
+    """
+    results = {}
+    
+    # Test 1: Magnet features (data.open, data.close, etc.)
+    try:
+        results['magnet_features'] = all([
+            hasattr(data, 'open') and data.open is not None,
+            hasattr(data, 'high') and data.high is not None,
+            hasattr(data, 'low') and data.low is not None,
+            hasattr(data, 'close') and data.close is not None,
+            hasattr(data, 'volume') and data.volume is not None
+        ])
+    except:
+        results['magnet_features'] = False
+    
+    # Test 2: get() method for specific features
+    try:
+        open_data = data.get('Open')
+        close_data = data.get('Close')
+        results['get_method'] = (
+            open_data is not None and 
+            close_data is not None and
+            len(open_data) > 0 and
+            len(close_data) > 0
+        )
+    except:
+        results['get_method'] = False
+    
+    # Test 3: Returns calculation
+    try:
+        returns = data.returns
+        results['returns_calc'] = returns is not None and len(returns) > 0
+    except:
+        results['returns_calc'] = False
+    
+    # Test 4: HLC/OHLC calculations
+    try:
+        results['hlc_calc'] = hasattr(data, 'hlc3') and data.hlc3 is not None
+        results['ohlc_calc'] = hasattr(data, 'ohlc4') and data.ohlc4 is not None
+    except:
+        results['hlc_calc'] = False
+        results['ohlc_calc'] = False
+    
+    # Test 5: run() method for indicators
+    try:
+        # Test with a simple SMA
+        sma_result = data.run("talib:SMA", 14)
+        results['run_method'] = sma_result is not None
+    except:
+        results['run_method'] = False
+    
+    # Test 6: Resampling capability
+    try:
+        # Only test if we have intraday data
+        if hasattr(data, 'wrapper') and data.wrapper.freq:
+            freq_str = str(data.wrapper.freq)
+            if any(x in freq_str for x in ['H', 'T', 'min']):
+                resampled = data.resample('1D')
+                results['resample_method'] = resampled is not None
+            else:
+                results['resample_method'] = True  # Daily or lower freq
+        else:
+            results['resample_method'] = True  # Can't determine freq
+    except:
+        results['resample_method'] = False
+    
+    # Test 7: Symbol selection (for multi-symbol data)
+    try:
+        if len(data.symbols) > 1:
+            first_symbol = data.symbols[0]
+            selected = data.select(first_symbol)
+            results['symbol_selection'] = selected is not None
+        else:
+            results['symbol_selection'] = True  # Single symbol, no selection needed
+    except:
+        results['symbol_selection'] = False
+    
+    return results
+
+
+def create_enhanced_data(
+    data: vbt.Data,
+    add_technicals: bool = False
+) -> vbt.Data:
+    """
+    Create an enhanced VBT Data object with additional features.
+    
+    Args:
+        data: Base VBT Data object
+        add_technicals: Whether to add technical indicators
+        
+    Returns:
+        Enhanced VBT Data object
+    """
+    if add_technicals and hasattr(data, 'close'):
+        # Add some basic technical indicators
+        try:
+            # These would be accessible as data attributes
+            data._sma_20 = data.run("talib:SMA", 20)
+            data._sma_50 = data.run("talib:SMA", 50)
+            data._rsi_14 = data.run("talib:RSI", 14)
+        except Exception as e:
+            logger.debug(f"Could not add technical indicators: {e}")
+    
+    return data
+
+
+def quick_fetch(
+    symbol: str,
+    days: int = 365,
+    timeframe: str = '1d',
+    exchange_id: str = 'binance'
+) -> Optional[vbt.Data]:
+    """
+    Quick single-symbol fetch for prototyping and strategy development.
+    
+    Args:
+        symbol: Trading symbol (e.g., 'BTC/USDT')
+        days: Number of days to look back (default: 365)
+        timeframe: Timeframe string (default: '1d')
+        exchange_id: Exchange identifier (default: 'binance')
+        
+    Returns:
+        VBT Data object or None
+        
+    Examples:
+        >>> # Quick fetch last year of BTC data
+        >>> data = quick_fetch('BTC/USDT')
+        >>> close_price = data.close
+        >>> rsi = data.run('talib:RSI', 14)
+    """
+    import pandas as pd
+    
+    # Calculate start date
+    end_date = pd.Timestamp.now(tz='UTC')
+    start_date = end_date - pd.Timedelta(days=days)
+    
+    return fetch_data(
+        symbols=[symbol],
+        exchange_id=exchange_id,
+        timeframe=timeframe,
+        start_date=start_date,
+        end_date=end_date,
+        use_cache=True
+    )
+
+
+def load_latest(
+    exchange_id: str = 'binance',
+    timeframe: str = '1d',
+    symbols: Optional[List[str]] = None,
+    market_type: str = 'spot'
+) -> Optional[vbt.Data]:
+    """
+    Load latest cached data for quick analysis.
+    
+    Args:
+        exchange_id: Exchange identifier
+        timeframe: Timeframe to load
+        symbols: Specific symbols to load (None for all)
+        market_type: Market type
+        
+    Returns:
+        VBT Data object with cached data or None
+        
+    Examples:
+        >>> # Load all cached daily data
+        >>> data = load_latest()
+        >>> 
+        >>> # Load specific symbols
+        >>> data = load_latest(symbols=['BTC/USDT', 'ETH/USDT'])
+    """
+    from ..storage.data_storage import data_storage
+    
+    # Load from storage
+    data = data_storage.load_data(exchange_id, timeframe, symbols, market_type)
+    
+    if data is not None:
+        logger.info(
+            f"Loaded {len(data.symbols)} symbols from cache: "
+            f"{exchange_id} {timeframe} {market_type}"
+        )
+        
+        # Run integration tests in debug mode
+        if logger.isEnabledFor(logging.DEBUG):
+            test_results = test_vbt_integration(data)
+            logger.debug(f"VBT integration test results: {test_results}")
+    
+    return data 
