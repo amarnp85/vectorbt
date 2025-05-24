@@ -1,0 +1,40 @@
+================================================================================
+🔍 DATA HEALTH CHECK REPORT
+================================================================================
+Generated: 2025-05-23 10:52:57
+Files analyzed: 1
+Auto-fix enabled: No
+
+📅 CACHED INCEPTION DATA
+----------------------------------------
+Total cached inception dates: 3256
+  hyperliquid: 316 symbols
+  binance: 1994 symbols
+  bybit: 946 symbols
+
+📋 SUMMARY
+----------------------------------------
+🔴 Critical issues: 0
+🟡 Warnings: 0
+ℹ️  Info: 0
+📊 Total issues: 0
+
+📁 FILE OVERVIEW
+----------------------------------------
+Total storage: 0.1 MB
+Total symbols: 1
+
+   By Exchange:
+     binance: 1 files
+   By Timeframe:
+     1d: 1 files
+
+✅ NO ISSUES FOUND
+All data files passed health checks!
+
+================================================================================
+💡 RECOMMENDATIONS
+================================================================================
+🎉 DATA QUALITY EXCELLENT!
+  Your cached data appears to be in excellent condition.
+  Continue with regular monitoring and updates.

@@ -6,6 +6,7 @@ A streamlined cache manager focused on the core requirements:
 1. Volume data cache (refreshed daily)
 2. Inception timestamp cache (persistent)
 3. Basic failed symbol tracking
+4. Blacklist - manually specified symbols to exclude from all operations
 
 This replaces the complex multi-cache system with a focused, efficient implementation.
 """
@@ -30,11 +31,14 @@ class SimpleCacheManager:
     1. Volume data - cached daily, automatically expires after 24 hours
     2. Timestamp data - persistent inception timestamps for symbols
     3. Failed symbols - basic tracking to avoid retrying problematic symbols
+    4. Blacklist - manually specified symbols to exclude from all operations
     
     Each exchange has its own directory with three files:
     - volume.json (expires after 24 hours)
     - timestamps.json (persistent)
     - failed_symbols.json (list of problematic symbols)
+    
+    Global blacklist.json file in cache root excludes symbols across all exchanges.
     """
     
     def __init__(self, cache_dir: Optional[str] = None):
@@ -47,8 +51,175 @@ class SimpleCacheManager:
         self._timestamp_cache = {}   # exchange -> symbol -> timestamp
         self._failed_symbols = {}    # exchange -> set of failed symbols
         
+        # Initialize default blacklist if needed
+        self._ensure_default_blacklist()
+        
         # Load existing caches
         self._load_caches()
+    
+    def _ensure_default_blacklist(self) -> None:
+        """
+        Ensure a default blacklist.json exists with common problematic symbols.
+        
+        This is called during cache manager initialization to guarantee that
+        any exchange will have a sensible default blacklist applied, particularly
+        for stable-stable pairs that provide minimal trading value.
+        """
+        blacklist_file = os.path.join(self.cache_dir, 'blacklist.json')
+        
+        if not os.path.exists(blacklist_file):
+            logger.info(f"📝 Creating default blacklist.json at {blacklist_file}")
+            
+            # Default blacklist with common stable-stable pairs and problematic symbols
+            default_blacklist = {
+                "global": [
+                    # Major stable-stable pairs (minimal price movement)
+                    "USDC/USDT",
+                    "BUSD/USDT", 
+                    "TUSD/USDT",
+                    "DAI/USDT",
+                    "USDP/USDT",
+                    "USDC/BUSD",
+                    "USDT/BUSD",
+                    "DAI/USDC",
+                    "TUSD/USDC",
+                    "USDP/USDC"
+                ],
+                "binance": [
+                    # Binance-specific stable pairs
+                    "BUSD/FDUSD",
+                    "FDUSD/USDT"
+                ],
+                "bybit": [
+                    # Bybit futures stable pairs
+                    "USDC/USDT:USDT",
+                    "BUSD/USDT:USDT"
+                ],
+                "okx": [
+                    # OKX-specific exclusions
+                ],
+                "kucoin": [
+                    # KuCoin-specific exclusions  
+                ],
+                "coinbase": [
+                    # Coinbase-specific exclusions
+                ],
+                "_comment": "Global blacklist applies to all exchanges. Exchange-specific lists apply only to that exchange. Stable-stable pairs are blacklisted as they have minimal price movement and low trading value.",
+                "_usage": "Add symbols here to exclude them from all fetch operations. Use 'global' for all exchanges or specific exchange names for targeted exclusions.",
+                "_last_updated": datetime.now().isoformat()
+            }
+            
+            try:
+                with open(blacklist_file, 'w') as f:
+                    json.dump(default_blacklist, f, indent=2)
+                logger.info(f"✅ Created default blacklist with {len(default_blacklist['global'])} global exclusions")
+                logger.info(f"🚫 Default global blacklist: {default_blacklist['global'][:5]}{'...' if len(default_blacklist['global']) > 5 else ''}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not create default blacklist.json: {e}")
+        else:
+            # Validate existing blacklist structure and update if needed
+            try:
+                with open(blacklist_file, 'r') as f:
+                    existing_blacklist = json.load(f)
+                
+                # Ensure USDC/USDT is in global blacklist (user requirement)
+                needs_update = False
+                if isinstance(existing_blacklist, dict):
+                    global_list = existing_blacklist.get('global', [])
+                    if 'USDC/USDT' not in global_list:
+                        global_list.append('USDC/USDT')
+                        existing_blacklist['global'] = global_list
+                        needs_update = True
+                        logger.info("🔄 Adding USDC/USDT to existing global blacklist")
+                
+                # Update last_updated timestamp if we made changes
+                if needs_update:
+                    existing_blacklist['_last_updated'] = datetime.now().isoformat()
+                    with open(blacklist_file, 'w') as f:
+                        json.dump(existing_blacklist, f, indent=2)
+                    logger.info("✅ Updated existing blacklist.json")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ Could not validate existing blacklist.json: {e}")
+    
+    def get_blacklist(self) -> Dict[str, List[str]]:
+        """
+        Load and return the current blacklist configuration.
+        
+        Returns:
+            Dictionary with global and exchange-specific blacklists
+        """
+        blacklist_file = os.path.join(self.cache_dir, 'blacklist.json')
+        
+        try:
+            if os.path.exists(blacklist_file):
+                with open(blacklist_file, 'r') as f:
+                    return json.load(f)
+            else:
+                # Should not happen due to _ensure_default_blacklist(), but handle gracefully
+                return {"global": ["USDC/USDT"]}
+        except Exception as e:
+            logger.warning(f"⚠️ Error loading blacklist: {e}")
+            return {"global": ["USDC/USDT"]}  # Fallback to minimum default
+    
+    def is_symbol_blacklisted(self, symbol: str, exchange_id: str = None) -> bool:
+        """
+        Check if a symbol is blacklisted.
+        
+        Args:
+            symbol: Symbol to check
+            exchange_id: Optional exchange ID for exchange-specific checks
+            
+        Returns:
+            True if symbol is blacklisted
+        """
+        blacklist_data = self.get_blacklist()
+        
+        # Check global blacklist
+        global_blacklist = blacklist_data.get('global', [])
+        if symbol in global_blacklist:
+            return True
+        
+        # Check exchange-specific blacklist
+        if exchange_id:
+            exchange_blacklist = blacklist_data.get(exchange_id.lower(), [])
+            if symbol in exchange_blacklist:
+                return True
+        
+        return False
+    
+    def filter_blacklisted_symbols(self, symbols: List[str], exchange_id: str = None) -> List[str]:
+        """
+        Filter out blacklisted symbols from a list.
+        
+        Args:
+            symbols: List of symbols to filter
+            exchange_id: Optional exchange ID for exchange-specific filtering
+            
+        Returns:
+            Filtered list of symbols
+        """
+        blacklist_data = self.get_blacklist()
+        
+        # Combine global and exchange-specific blacklists
+        blacklisted = set(blacklist_data.get('global', []))
+        if exchange_id:
+            exchange_blacklist = blacklist_data.get(exchange_id.lower(), [])
+            blacklisted.update(exchange_blacklist)
+        
+        if not blacklisted:
+            return symbols
+        
+        # Filter out blacklisted symbols
+        filtered = [s for s in symbols if s not in blacklisted]
+        
+        removed_count = len(symbols) - len(filtered)
+        if removed_count > 0:
+            logger.info(f"🚫 Filtered out {removed_count} blacklisted symbols")
+            removed_symbols = [s for s in symbols if s in blacklisted]
+            logger.debug(f"🚫 Removed symbols: {removed_symbols}")
+        
+        return filtered
     
     def _get_exchange_dir(self, exchange_id: str) -> str:
         """Get the directory path for an exchange."""

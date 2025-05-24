@@ -48,14 +48,7 @@ def format_data_summary(data, exchange_id: str, market_type: str, timeframe: str
         print(f"📊 Date range: {data.wrapper.index[0]} to {data.wrapper.index[-1]}")
         print(f"📊 Data points per symbol: {len(data.wrapper.index)}")
     
-    # Show volume metadata if available
-    if hasattr(data.wrapper, '_metadata') and 'volume_data' in data.wrapper._metadata:
-        volume_data = data.wrapper._metadata['volume_data']
-        print(f"\n📈 Volume Rankings:")
-        for i, symbol in enumerate(data.symbols, 1):
-            volume = volume_data.get(symbol, 0)
-            volume_str = f"{volume/1000000:.1f}M" if volume > 1000000 else f"{volume/1000:.1f}K"
-            print(f"   {i:2d}. {symbol:12s} - ${volume_str:>8s}")
+    # Volume rankings already shown during fetch process - no need to duplicate
 
 def show_storage_summary():
     """Display current storage summary."""
@@ -121,11 +114,11 @@ Examples:
     parser.add_argument('--timeframe', type=str, default='1d',
                       help='Timeframe (e.g., 1m, 5m, 1h, 4h, 1d) (default: 1d)')
     parser.add_argument('--start', type=str,
-                      help='Start date (e.g., "7 days ago", "2024-01-01")')
+                      help='Start date (e.g., "7 days ago", "2024-01-01"). If not specified, uses cached inception dates.')
     parser.add_argument('--end', type=str,
                       help='End date (e.g., "1 day ago", "2024-12-31")')
     parser.add_argument('--inception', action='store_true',
-                      help='Fetch from inception (maximum available history)')
+                      help='Force fetch from inception (maximum available history) even if start/end dates are specified')
     
     # Cache settings
     parser.add_argument('--no-cache', action='store_true',
@@ -158,10 +151,19 @@ Examples:
     if args.inception:
         # For inception, we'll use a very early date to get maximum history
         start_date = "2009-01-01"  # Bitcoin genesis
-        end_date = None
-    else:
+        # Don't override end_date here - let it use the default logic below
+    elif args.start or args.end:
+        # Only use provided dates if specifically given
         start_date = args.start
+    else:
+        # Default behavior: use cached inception dates (start_date = None triggers this)
+        start_date = None
+        
+    # Default to "now" for end_date unless explicitly provided
+    if args.end is not None:
         end_date = args.end
+    else:
+        end_date = "now"  # Always default to current time to ensure latest data
     
     if not args.quiet:
         print(f"🚀 Fetching Data")
@@ -178,6 +180,8 @@ Examples:
             print(f"Date range: FROM INCEPTION")
         elif start_date or end_date:
             print(f"Date range: {start_date or 'earliest'} to {end_date or 'latest'}")
+        else:
+            print(f"Date range: FROM CACHED INCEPTION to {end_date or 'latest'}")
         print(f"Cache: {'disabled' if args.no_cache else 'enabled'}")
         print(f"{'='*50}")
     

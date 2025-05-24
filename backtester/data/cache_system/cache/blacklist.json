@@ -1,0 +1,28 @@
+{
+  "global": [
+    "USDC/USDT",
+    "BUSD/USDT",
+    "TUSD/USDT",
+    "DAI/USDT",
+    "USDP/USDT",
+    "USDC/BUSD",
+    "USDT/BUSD",
+    "DAI/USDC",
+    "TUSD/USDC",
+    "USDP/USDC"
+  ],
+  "binance": [
+    "BUSD/FDUSD",
+    "FDUSD/USDT"
+  ],
+  "bybit": [
+    "USDC/USDT:USDT",
+    "BUSD/USDT:USDT"
+  ],
+  "okx": [],
+  "kucoin": [],
+  "coinbase": [],
+  "_comment": "Global blacklist applies to all exchanges. Exchange-specific lists apply only to that exchange. Stable-stable pairs are blacklisted as they have minimal price movement and low trading value.",
+  "_usage": "Add symbols here to exclude them from all fetch operations. Use 'global' for all exchanges or specific exchange names for targeted exclusions.",
+  "_last_updated": "2025-01-22T12:00:00.000000"
+} 

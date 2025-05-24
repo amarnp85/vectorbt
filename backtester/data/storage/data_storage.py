@@ -69,6 +69,12 @@ class DataStorage:
             # Use VBT's native save method with compression
             data.save(pickle_path, compression='blosc')
             
+            # Check what file was actually created
+            if os.path.exists(pickle_path):
+                logger.debug(f"Created uncompressed file: {pickle_path}")
+            if os.path.exists(pickle_path + '.blosc'):
+                logger.debug(f"Created compressed file: {pickle_path}.blosc")
+            
             logger.info(f"Saved VBT data to pickle: {pickle_path}")
             return True
             

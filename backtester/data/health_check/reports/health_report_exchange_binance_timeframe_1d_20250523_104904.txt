@@ -1,0 +1,148 @@
+================================================================================
+🔍 DATA HEALTH CHECK REPORT
+================================================================================
+Generated: 2025-05-23 10:49:04
+Files analyzed: 1
+Auto-fix enabled: No
+
+📅 CACHED INCEPTION DATA
+----------------------------------------
+Total cached inception dates: 3256
+  hyperliquid: 316 symbols
+  bybit: 946 symbols
+  binance: 1994 symbols
+
+📋 SUMMARY
+----------------------------------------
+🔴 Critical issues: 16
+🟡 Warnings: 1
+ℹ️  Info: 0
+📊 Total issues: 17
+
+📁 FILE OVERVIEW
+----------------------------------------
+Total storage: 0.1 MB
+Total symbols: 29
+
+   By Exchange:
+     binance: 1 files
+   By Timeframe:
+     1d: 1 files
+
+🚨 ISSUES FOUND
+----------------------------------------
+
+CRITICAL ISSUES (16):
+  • binance_spot_1d.pickle.blosc: BTC/USDT missing 1836 days from inception (expected: 2017-08-17, actual: 2022-08-27)
+    expected_inception: 2017-08-17 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1836
+  • binance_spot_1d.pickle.blosc: ETH/USDT missing 1836 days from inception (expected: 2017-08-17, actual: 2022-08-27)
+    expected_inception: 2017-08-17 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1836
+  • binance_spot_1d.pickle.blosc: USDC/USDT missing 1351 days from inception (expected: 2018-12-15, actual: 2022-08-27)
+    expected_inception: 2018-12-15 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1351
+  • binance_spot_1d.pickle.blosc: SOL/USDT missing 746 days from inception (expected: 2020-08-11, actual: 2022-08-27)
+    expected_inception: 2020-08-11 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 746
+  • binance_spot_1d.pickle.blosc: DOGE/USDT missing 1149 days from inception (expected: 2019-07-05, actual: 2022-08-27)
+    expected_inception: 2019-07-05 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1149
+  • binance_spot_1d.pickle.blosc: XRP/USDT missing 1576 days from inception (expected: 2018-05-04, actual: 2022-08-27)
+    expected_inception: 2018-05-04 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1576
+  • binance_spot_1d.pickle.blosc: BNB/USDT missing 1755 days from inception (expected: 2017-11-06, actual: 2022-08-27)
+    expected_inception: 2017-11-06 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1755
+  • binance_spot_1d.pickle.blosc: TRX/USDT missing 1538 days from inception (expected: 2018-06-11, actual: 2022-08-27)
+    expected_inception: 2018-06-11 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1538
+  • binance_spot_1d.pickle.blosc: AVAX/USDT missing 704 days from inception (expected: 2020-09-22, actual: 2022-08-27)
+    expected_inception: 2020-09-22 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 704
+  • binance_spot_1d.pickle.blosc: ADA/USDT missing 1593 days from inception (expected: 2018-04-17, actual: 2022-08-27)
+    expected_inception: 2018-04-17 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1593
+  • binance_spot_1d.pickle.blosc: LTC/USDT missing 1718 days from inception (expected: 2017-12-13, actual: 2022-08-27)
+    expected_inception: 2017-12-13 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1718
+  • binance_spot_1d.pickle.blosc: LINK/USDT missing 1319 days from inception (expected: 2019-01-16, actual: 2022-08-27)
+    expected_inception: 2019-01-16 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 1319
+  • binance_spot_1d.pickle.blosc: AAVE/USDT missing 681 days from inception (expected: 2020-10-15, actual: 2022-08-27)
+    expected_inception: 2020-10-15 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 681
+  • binance_spot_1d.pickle.blosc: UNI/USDT missing 709 days from inception (expected: 2020-09-17, actual: 2022-08-27)
+    expected_inception: 2020-09-17 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 709
+  • binance_spot_1d.pickle.blosc: RUNE/USDT missing 722 days from inception (expected: 2020-09-04, actual: 2022-08-27)
+    expected_inception: 2020-09-04 00:00:00+00:00
+    actual_start: 2022-08-27 00:00:00+00:00
+    missing_days: 722
+  • binance_spot_1d.pickle.blosc: Data completeness 3.6% (139,990 NaN values out of 145,145 cells)
+    data_type: VBT_OHLCV
+    total_symbols: 29
+    total_timesteps: 1001
+    has_all_ohlcv: True
+    open_cells: 29029
+    open_nan: 27998
+    high_cells: 29029
+    high_nan: 27998
+    low_cells: 29029
+    low_nan: 27998
+    close_cells: 29029
+    close_nan: 27998
+    volume_cells: 29029
+    volume_nan: 27998
+    total_cells: 145145
+    nan_cells: 139990
+    completeness_percentage: 3.5516207930001036
+
+WARNING ISSUES (1):
+  • binance_spot_1d.pickle.blosc: Significant variation in symbol coverage (1 to 1001 points)
+
+================================================================================
+📋 DETAILED FILE ANALYSIS
+================================================================================
+
+📄 binance_spot_1d.pickle.blosc
+   Size: 0.09 MB
+   Modified: 2025-05-23 10:48:08.421628
+   Symbols: 29 (BTC/USDT, ETH/USDT, USDC/USDT, SOL/USDT, SUI/USDT...)
+   Date range: 2022-08-27 00:00:00+00:00 to 2025-05-23 00:00:00+00:00
+   Shape: (1001, 5)
+   Freshness: 6.8 hours behind
+   Completeness: 3.6%
+
+================================================================================
+💡 RECOMMENDATIONS
+================================================================================
+🔴 CRITICAL ACTIONS NEEDED:
+  1. Run with --auto-fix to automatically resolve critical issues
+  2. Address critical data gaps - consider re-fetching affected periods
+  3. Fix invalid OHLCV data - these can affect calculations
+  4. Resolve loading errors - these files may be corrupted
+
+🟡 RECOMMENDED ACTIONS:
+  1. Consider filling minor data gaps
+  2. Review inception coverage for important symbols
+  3. Monitor zero volume periods
+  4. Update stale data regularly
+
+🔧 AUTO-FIX AVAILABLE:
+  Run this script with --auto-fix to automatically resolve many issues.
+  This will execute commands to re-fetch missing data and update stale data.
