@@ -150,6 +150,11 @@ class FetchLogger:
         # Store target end date for staleness checking
         self._target_end_date = end_date
         
+        # Add current UTC time for debugging
+        import vectorbtpro as vbt
+        current_utc = vbt.utc_timestamp()
+        current_utc_str = current_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+        
         # Create a compact summary panel
         date_range = f"{start_date or 'inception'} → {end_date or 'now'}"
         
@@ -158,7 +163,8 @@ class FetchLogger:
                 f"[bold cyan]{self.exchange_id.upper()}[/bold cyan] | "
                 f"[cyan]{self.timeframe}[/cyan] | "
                 f"[cyan]{len(self.requested_symbols)} symbols[/cyan] | "
-                f"[dim]{date_range}[/dim]",
+                f"[dim]{date_range}[/dim]\n"
+                f"[dim]🕐 {current_utc_str}[/dim]",
                 title="📊 Data Fetch",
                 expand=False,
                 style="cyan"
@@ -753,6 +759,45 @@ def fetch_data(
         return None
 
 # Cache operations
+def _get_timeframe_minutes(timeframe: str) -> int:
+    """
+    Convert timeframe string to minutes.
+    
+    Args:
+        timeframe: Timeframe string (e.g., '5m', '1h', '1d')
+        
+    Returns:
+        Number of minutes in the timeframe
+    """
+    tf = timeframe.lower().strip()
+    
+    try:
+        if tf.endswith('s'):
+            return int(tf[:-1]) / 60  # Convert seconds to minutes
+        elif tf.endswith('m') or tf.endswith('min'):
+            return int(tf[:-3] if tf.endswith('min') else tf[:-1])
+        elif tf.endswith('h') or tf.endswith('hour'):
+            hours = int(tf[:-4] if tf.endswith('hour') else tf[:-1])
+            return hours * 60
+        elif tf.endswith('d') or tf.endswith('day'):
+            days = int(tf[:-3] if tf.endswith('day') else tf[:-1])
+            return days * 24 * 60
+        elif tf.endswith('w') or tf.endswith('week'):
+            weeks = int(tf[:-4] if tf.endswith('week') else tf[:-1])
+            return weeks * 7 * 24 * 60
+        elif tf.endswith('M'):  # Month
+            months = int(tf[:-1])
+            return months * 30 * 24 * 60  # Approximate
+        elif tf.endswith('y'):  # Year
+            years = int(tf[:-1])
+            return years * 365 * 24 * 60  # Approximate
+        else:
+            # Default to 1 hour
+            return 60
+    except (ValueError, TypeError):
+        # Default to 1 hour
+        return 60
+
 def _calculate_latest_complete_candle_time(current_time: vbt.timestamp, timeframe: str) -> vbt.timestamp:
     """
     Calculate the exact START time of the latest complete candle for a given timeframe.
@@ -908,6 +953,8 @@ def _identify_stale_symbols(
     """
     Identify which specific symbols are stale vs fresh using exact candle boundary awareness.
     
+    CRITICAL FIX: Properly handles incomplete candles by filtering them out before freshness check.
+    
     Returns:
         Tuple of (stale_symbols, fresh_symbols)
     """
@@ -921,10 +968,13 @@ def _identify_stale_symbols(
         else:
             current_time = vbt.timestamp(target_end, tz='UTC')
         
-        # Calculate exactly when the latest complete candle should end
+        # Calculate exactly when the latest complete candle should start
         expected_latest_candle = _calculate_latest_complete_candle_time(current_time, timeframe)
         
-        logger.debug(f"Exact candle boundary analysis for {timeframe}:")
+        # Parse timeframe to get interval in minutes
+        tf_minutes = _get_timeframe_minutes(timeframe)
+        
+        logger.debug(f"Exact candle boundary analysis for {timeframe} ({tf_minutes}min intervals):")
         logger.debug(f"   Current time: {current_time}")
         logger.debug(f"   Expected latest complete candle: {expected_latest_candle}")
         
@@ -944,18 +994,42 @@ def _identify_stale_symbols(
                     continue
                 
                 # Get latest timestamp for this symbol
-                actual_latest = symbol_data.index[-1]
+                raw_latest = symbol_data.index[-1]
                 
                 # Ensure timezone-aware comparison
-                if actual_latest.tz is None:
-                    actual_latest = actual_latest.tz_localize('UTC')
-                elif str(actual_latest.tz) != 'UTC':
-                    actual_latest = actual_latest.tz_convert('UTC')
+                if raw_latest.tz is None:
+                    raw_latest = raw_latest.tz_localize('UTC')
+                elif str(raw_latest.tz) != 'UTC':
+                    raw_latest = raw_latest.tz_convert('UTC')
                 
-                # Exact comparison: is our data missing the expected latest candle?
+                # CRITICAL FIX: Check if the latest candle is complete
+                minutes_since_candle_start = (current_time - raw_latest).total_seconds() / 60
+                is_incomplete_candle = minutes_since_candle_start < tf_minutes
+                
+                if is_incomplete_candle:
+                    # Latest candle is incomplete - use the previous candle as actual latest
+                    if len(symbol_data) >= 2:
+                        actual_latest = symbol_data.index[-2]
+                        if actual_latest.tz is None:
+                            actual_latest = actual_latest.tz_localize('UTC')
+                        elif str(actual_latest.tz) != 'UTC':
+                            actual_latest = actual_latest.tz_convert('UTC')
+                        
+                        logger.debug(f"   {symbol}: incomplete candle {raw_latest} (age: {minutes_since_candle_start:.1f}min), using previous: {actual_latest}")
+                    else:
+                        # Only one candle and it's incomplete
+                        stale_symbols.append(symbol)
+                        logger.debug(f"   {symbol}: only incomplete candle available, marking stale")
+                        continue
+                else:
+                    # Latest candle is complete
+                    actual_latest = raw_latest
+                    logger.debug(f"   {symbol}: complete candle {actual_latest} (age: {minutes_since_candle_start:.1f}min)")
+                
+                # Now check freshness against expected latest complete candle
                 is_stale = actual_latest < expected_latest_candle
                 
-                logger.debug(f"   {symbol}: actual={actual_latest}, expected={expected_latest_candle}, stale={is_stale}")
+                logger.debug(f"   {symbol}: actual_latest={actual_latest}, expected={expected_latest_candle}, stale={is_stale}")
                 
                 if is_stale:
                     stale_symbols.append(symbol)
@@ -1321,8 +1395,9 @@ def _is_data_fresh(
     """
     Check if cached data is fresh enough for the target end date.
     
-    CRITICAL FIX: For multi-symbol data, checks the EARLIEST latest timestamp
-    across all symbols to ensure ALL symbols are fresh, not just the latest one.
+    CRITICAL FIX: 
+    1. For multi-symbol data, checks the EARLIEST latest timestamp across all symbols
+    2. Properly handles incomplete candles by filtering them out before freshness check
     """
     
     try:
@@ -1335,28 +1410,71 @@ def _is_data_fresh(
         else:
             target_dt = vbt.timestamp(target_end, tz='UTC')
         
-        # CRITICAL FIX: For multi-symbol data, find the earliest "latest timestamp"
-        # This ensures ALL symbols are fresh, not just the overall latest
+        # Parse timeframe to get interval in minutes
+        tf_minutes = _get_timeframe_minutes(timeframe)
+        
+        # CRITICAL FIX: For multi-symbol data, find the earliest "effective latest timestamp"
+        # accounting for incomplete candles
         if hasattr(data, 'symbols') and len(data.symbols) > 1:
-            symbol_latest_times = []
+            symbol_effective_latest_times = []
             for symbol in data.symbols:
                 try:
                     symbol_data = data.close[symbol].dropna()
                     if len(symbol_data) > 0:
-                        symbol_latest_times.append(symbol_data.index[-1])
+                        raw_latest = symbol_data.index[-1]
+                        
+                        # Check if latest candle is incomplete
+                        if raw_latest.tz is None:
+                            raw_latest = raw_latest.tz_localize('UTC')
+                        elif str(raw_latest.tz) != 'UTC':
+                            raw_latest = raw_latest.tz_convert('UTC')
+                        
+                        minutes_since_candle_start = (target_dt - raw_latest).total_seconds() / 60
+                        is_incomplete_candle = minutes_since_candle_start < tf_minutes
+                        
+                        if is_incomplete_candle and len(symbol_data) >= 2:
+                            # Use previous candle as effective latest
+                            effective_latest = symbol_data.index[-2]
+                        else:
+                            # Use raw latest (complete candle)
+                            effective_latest = raw_latest
+                        
+                        symbol_effective_latest_times.append(effective_latest)
                 except Exception:
                     continue
             
-            if symbol_latest_times:
-                # Use the EARLIEST latest timestamp - ensures ALL symbols are fresh
-                latest_dt = min(symbol_latest_times)
-                logger.debug(f"Multi-symbol freshness check: earliest latest timestamp = {latest_dt}")
+            if symbol_effective_latest_times:
+                # Use the EARLIEST effective latest timestamp - ensures ALL symbols are fresh
+                latest_dt = min(symbol_effective_latest_times)
+                logger.debug(f"Multi-symbol freshness check: earliest effective latest timestamp = {latest_dt}")
             else:
                 # Fallback to overall latest
                 latest_dt = data.wrapper.index[-1]
         else:
-            # Single symbol or fallback
-            latest_dt = data.wrapper.index[-1]
+            # Single symbol case
+            symbol_data = data.close.dropna() if not hasattr(data, 'symbols') or len(data.symbols) == 1 else data.close[data.symbols[0]].dropna()
+            
+            if len(symbol_data) > 0:
+                raw_latest = symbol_data.index[-1]
+                
+                # Check if latest candle is incomplete
+                if raw_latest.tz is None:
+                    raw_latest = raw_latest.tz_localize('UTC')
+                elif str(raw_latest.tz) != 'UTC':
+                    raw_latest = raw_latest.tz_convert('UTC')
+                
+                minutes_since_candle_start = (target_dt - raw_latest).total_seconds() / 60
+                is_incomplete_candle = minutes_since_candle_start < tf_minutes
+                
+                if is_incomplete_candle and len(symbol_data) >= 2:
+                    # Use previous candle as effective latest
+                    latest_dt = symbol_data.index[-2]
+                else:
+                    # Use raw latest (complete candle)
+                    latest_dt = raw_latest
+            else:
+                # Fallback to wrapper index
+                latest_dt = data.wrapper.index[-1]
         
         # Ensure both timestamps are timezone-aware in UTC
         if latest_dt.tz is None:
@@ -1380,7 +1498,7 @@ def _is_data_fresh(
             # For intraday: fresh if we have the expected latest complete candle
             is_fresh = latest_dt >= expected_latest_candle
         
-        logger.debug(f"Exact freshness check: latest={latest_dt}, expected_candle={expected_latest_candle}, fresh={is_fresh}")
+        logger.debug(f"Exact freshness check: effective_latest={latest_dt}, expected_candle={expected_latest_candle}, fresh={is_fresh}")
         return is_fresh
             
     except Exception as e:
@@ -1494,95 +1612,92 @@ def _try_cache_fetch(
     else:
         logger.debug("Skipping inception completeness check for implicit inception request")
     
-    # Check data freshness using exact candle boundary awareness
-    if end_date:
-        logger.debug(f"Checking freshness with end_date: {end_date}")
-        requested_cached_data = cached_data.select(symbols)
+    # CRITICAL FIX: Always check data freshness, defaulting to "now" when end_date is None
+    effective_end_date = end_date if end_date is not None else "now"
+    current_utc = vbt.utc_timestamp()
+    
+    logger.debug(f"Checking freshness with end_date: {effective_end_date} (current UTC: {current_utc})")
+    requested_cached_data = cached_data.select(symbols)
+    
+    # Identify which specific symbols are stale vs fresh
+    stale_symbols, fresh_symbols = _identify_stale_symbols(
+        requested_cached_data, symbols, effective_end_date, timeframe
+    )
+    
+    logger.debug(f"Per-symbol staleness analysis:")
+    logger.debug(f"   Stale symbols ({len(stale_symbols)}): {stale_symbols}")
+    logger.debug(f"   Fresh symbols ({len(fresh_symbols)}): {fresh_symbols}")
+    
+    if stale_symbols and fresh_symbols:
+        # MIXED STALENESS: Some symbols are stale, some are fresh
+        # Use selective update instead of complete cache update
+        logger.debug(f"Mixed staleness detected: performing selective update for {len(stale_symbols)} stale symbols")
         
-        # Identify which specific symbols are stale vs fresh
-        stale_symbols, fresh_symbols = _identify_stale_symbols(
-            requested_cached_data, symbols, end_date, timeframe
-        )
+        fetch_logger.log_cache_result("stale", {
+            "selective_update": True,
+            "stale_count": len(stale_symbols),
+            "fresh_count": len(fresh_symbols)
+        })
         
-        logger.debug(f"Per-symbol staleness analysis:")
-        logger.debug(f"   Stale symbols ({len(stale_symbols)}): {stale_symbols}")
-        logger.debug(f"   Fresh symbols ({len(fresh_symbols)}): {fresh_symbols}")
+        # Update cache state for logging
+        fetch_logger.cache_state.update({
+            "available_symbols": fresh_symbols,
+            "missing_symbols": stale_symbols,
+            "selective_update": True
+        })
+        
+        # Fetch only stale symbols and merge with fresh cached symbols
+        return (_fetch_missing_symbols_and_merge(
+            all_symbols=symbols,
+            missing_symbols=stale_symbols,
+            available_symbols=fresh_symbols,
+            cached_data=cached_data,
+            exchange_id=exchange_id,
+            timeframe=timeframe,
+            symbol_start_dates=symbol_start_dates,
+            end_date=effective_end_date,  # Use effective_end_date consistently
+            market_type=market_type,
+            original_start_date=original_start_date,
+            fetch_logger=fetch_logger
+        ), "Selective Update", True)
+        
+    elif stale_symbols and not fresh_symbols:
+        # ALL SYMBOLS ARE STALE: Use VBT's complete update
+        logger.debug(f"All symbols are stale: attempting complete cache update")
+        fetch_logger.log_cache_result("stale", {"reason": "all symbols stale"})
+        
+        # Use VBT's native update() method for complete update
+        try:
+            if isinstance(effective_end_date, str):
+                if effective_end_date.lower() == "now":
+                    update_end = vbt.utc_timestamp()
+                else:
+                    update_end = vbt.timestamp(effective_end_date, tz='UTC')
+            else:
+                update_end = vbt.timestamp(effective_end_date, tz='UTC')
+            
+            updated_data = cached_data.update(
+                end=update_end,
+                show_progress=False
+            )
+            
+            if updated_data is not None:
+                data_storage.save_data(updated_data, exchange_id, timeframe, market_type)
+                logger.debug("Successfully updated complete cached data (all symbols were stale)")
+                return updated_data.select(symbols), "Cache Operation", True
+            else:
+                logger.debug("VBT update returned None for complete update, falling back to exchange fetch")
+                
+        except Exception as e:
+            logger.debug(f"VBT complete update failed: {e}, falling back to exchange fetch")
+        
+        # If VBT update fails, fall back to complete exchange fetch
+        logger.debug("Complete cache update failed, falling back to complete exchange fetch")
+        return None, "Cache Operation", True
+        
     else:
-        logger.debug("No end_date specified, skipping freshness check")
-        # Initialize variables for case when no freshness check is needed
-        stale_symbols = []
-        fresh_symbols = symbols
-        
-        if stale_symbols and fresh_symbols:
-            # MIXED STALENESS: Some symbols are stale, some are fresh
-            # Use selective update instead of complete cache update
-            logger.debug(f"Mixed staleness detected: performing selective update for {len(stale_symbols)} stale symbols")
-            
-            fetch_logger.log_cache_result("stale", {
-                "selective_update": True,
-                "stale_count": len(stale_symbols),
-                "fresh_count": len(fresh_symbols)
-            })
-            
-            # Update cache state for logging
-            fetch_logger.cache_state.update({
-                "available_symbols": fresh_symbols,
-                "missing_symbols": stale_symbols,
-                "selective_update": True
-            })
-            
-            # Fetch only stale symbols and merge with fresh cached symbols
-            return (_fetch_missing_symbols_and_merge(
-                all_symbols=symbols,
-                missing_symbols=stale_symbols,
-                available_symbols=fresh_symbols,
-                cached_data=cached_data,
-                exchange_id=exchange_id,
-                timeframe=timeframe,
-                symbol_start_dates=symbol_start_dates,
-                end_date=end_date,
-                market_type=market_type,
-                original_start_date=original_start_date,
-                fetch_logger=fetch_logger
-            ), "Selective Update", True)
-            
-        elif stale_symbols and not fresh_symbols:
-            # ALL SYMBOLS ARE STALE: Use VBT's complete update
-            logger.debug(f"All symbols are stale: attempting complete cache update")
-            fetch_logger.log_cache_result("stale", {"reason": "all symbols stale"})
-            
-            # Use VBT's native update() method for complete update
-            try:
-                if isinstance(end_date, str):
-                    if end_date.lower() == "now":
-                        update_end = vbt.utc_timestamp()
-                    else:
-                        update_end = vbt.timestamp(end_date, tz='UTC')
-                else:
-                    update_end = vbt.timestamp(end_date, tz='UTC')
-                
-                updated_data = cached_data.update(
-                    end=update_end,
-                    show_progress=False
-                )
-                
-                if updated_data is not None:
-                    data_storage.save_data(updated_data, exchange_id, timeframe, market_type)
-                    logger.debug("Successfully updated complete cached data (all symbols were stale)")
-                    return updated_data.select(symbols), "Cache Operation", True
-                else:
-                    logger.debug("VBT update returned None for complete update, falling back to exchange fetch")
-                    
-            except Exception as e:
-                logger.debug(f"VBT complete update failed: {e}, falling back to exchange fetch")
-            
-            # If VBT update fails, fall back to complete exchange fetch
-            logger.debug("Complete cache update failed, falling back to complete exchange fetch")
-            return None, "Cache Operation", True
-            
-        else:
-            # ALL SYMBOLS ARE FRESH: No update needed
-            logger.debug("All requested symbols are fresh, no update needed")
+        # ALL SYMBOLS ARE FRESH: No update needed
+        logger.debug("All requested symbols are fresh, no update needed")
     
     # Cache hit - return requested symbols
     logger.debug("Cache validation passed, returning cache hit")
@@ -1685,14 +1800,27 @@ def _fetch_missing_symbols_and_merge(
     
     # Multi-strategy merge approach for maximum reliability
     try:
-        logger.debug("Merging cached and newly fetched data")
+        logger.debug(f"Merging cached data ({len(available_symbols)} symbols) with newly fetched data ({len(missing_data.symbols)} symbols)")
+        logger.debug(f"  Cached symbols: {available_symbols}")
+        logger.debug(f"  Missing data symbols: {list(missing_data.symbols)}")
         
         # Strategy 1: Try VBT's native concat with selected cached data
         try:
             available_cached_data = cached_data.select_symbols(available_symbols)
+            logger.debug(f"  Strategy 1: cached data shape {available_cached_data.wrapper.shape}, missing data shape {missing_data.wrapper.shape}")
             combined_data = available_cached_data.concat(missing_data)
+            logger.debug(f"  Strategy 1: combined shape {combined_data.wrapper.shape}, symbols {list(combined_data.symbols)}")
+            
+            # CRITICAL VALIDATION: Ensure all symbols are present
+            expected_symbols = set(available_symbols + list(missing_data.symbols))
+            actual_symbols = set(combined_data.symbols)
+            if actual_symbols != expected_symbols:
+                missing_in_result = expected_symbols - actual_symbols
+                logger.error(f"Strategy 1: Symbol validation failed! Missing symbols: {missing_in_result}")
+                raise ValueError(f"Concat dropped symbols: {missing_in_result}")
+            
             data_storage.save_data(combined_data, exchange_id, timeframe, market_type)
-            logger.debug("Strategy 1 (VBT concat) successful")
+            logger.debug("Strategy 1 (VBT concat) successful with all symbols present")
             return combined_data
         except Exception as concat_error:
             logger.debug(f"Strategy 1 (VBT concat) failed: {concat_error}")
@@ -1701,8 +1829,17 @@ def _fetch_missing_symbols_and_merge(
         try:
             available_cached_data = cached_data.select_symbols(available_symbols)
             combined_data = vbt.Data.concat([available_cached_data, missing_data])
+            
+            # CRITICAL VALIDATION: Ensure all symbols are present
+            expected_symbols = set(available_symbols + list(missing_data.symbols))
+            actual_symbols = set(combined_data.symbols)
+            if actual_symbols != expected_symbols:
+                missing_in_result = expected_symbols - actual_symbols
+                logger.error(f"Strategy 2: Symbol validation failed! Missing symbols: {missing_in_result}")
+                raise ValueError(f"VBT Data.concat dropped symbols: {missing_in_result}")
+            
             data_storage.save_data(combined_data, exchange_id, timeframe, market_type)
-            logger.debug("Strategy 2 (VBT Data.concat) successful")
+            logger.debug("Strategy 2 (VBT Data.concat) successful with all symbols present")
             return combined_data
         except Exception as merge_error:
             logger.debug(f"Strategy 2 (VBT Data.concat) failed: {merge_error}")
@@ -1777,8 +1914,16 @@ def _fetch_missing_symbols_and_merge(
             if symbol_dict:
                 combined_data = vbt.Data.from_data(symbol_dict)
                 if combined_data is not None:
+                    # CRITICAL VALIDATION: Ensure all symbols are present
+                    expected_symbols = set(available_symbols + list(missing_data.symbols))
+                    actual_symbols = set(combined_data.symbols)
+                    if actual_symbols != expected_symbols:
+                        missing_in_result = expected_symbols - actual_symbols
+                        logger.error(f"Strategy 3: Symbol validation failed! Missing symbols: {missing_in_result}")
+                        raise ValueError(f"Manual reconstruction dropped symbols: {missing_in_result}")
+                    
                     data_storage.save_data(combined_data, exchange_id, timeframe, market_type)
-                    logger.debug(f"Strategy 3 successful: reconstructed {len(symbol_dict)} symbols")
+                    logger.debug(f"Strategy 3 successful: reconstructed {len(symbol_dict)} symbols with all symbols present")
                     return combined_data
                 else:
                     logger.debug("Strategy 3 failed: VBT Data.from_data returned None")
