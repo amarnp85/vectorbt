@@ -1,0 +1,36 @@
+{
+  "symbol": "ETH/USDT",
+  "timeframe": "4h",
+  "optimization_date": "2025-05-28T16:47:08.115809",
+  "statistics": {
+    "total_combinations": 1200,
+    "valid_combinations": 1200,
+    "success_rate": 100.0,
+    "best_sharpe": 1.1215913094618797,
+    "worst_sharpe": 0.3523893661927679,
+    "mean_sharpe": 0.7078689206002995,
+    "std_sharpe": 0.16938454252896445,
+    "optimization_time": 37.70895314216614
+  },
+  "best_parameters": {
+    "fast_window": 30,
+    "slow_window": 70,
+    "atr_window": 10,
+    "atr_multiplier_sl": 1.5,
+    "atr_multiplier_tp": 3.0
+  },
+  "performance_metrics": {
+    "sharpe_ratio": 1.1215913094618797,
+    "total_return": 86.85180266023131,
+    "max_drawdown": -0.6710201393339316,
+    "win_rate": 0.4075471698113208,
+    "total_trades": 265,
+    "profit_factor": 1.2899212211401656
+  },
+  "date_range": {
+    "start_date": "2020-01-01",
+    "end_date": "2023-12-30",
+    "description": "Recent 18-month period for current market analysis",
+    "type": "custom"
+  }
+}

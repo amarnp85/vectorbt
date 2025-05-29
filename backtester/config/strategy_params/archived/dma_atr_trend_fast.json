@@ -1,0 +1,100 @@
+{
+  "strategy_name": "DMA-ATR-Trend Strategy (Fast Development)",
+  "strategy_class": "DMAATRTrendStrategy",
+  "description": "Fast development config with shorter MA windows for quicker signal generation during testing",
+  "version": "1.0.0",
+  "author": "Backtester System",
+  "category": "trend_following",
+  "usage": "development",
+  
+  "technical_parameters": {
+    "short_ma_window": 10,
+    "short_ma_type": "SMA",
+    "long_ma_window": 30,
+    "long_ma_type": "SMA",
+    "trend_ma_window": 50,
+    "trend_ma_type": "SMA",
+    "atr_period": 14,
+    "enable_short_trades": true
+  },
+  
+  "risk_management": {
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 4.0,
+    "max_position_size": 1.0,
+    "risk_per_trade": 0.02
+  },
+  
+  "trend_confirmation": {
+    "use_adx_filter": false,
+    "adx_period": 14,
+    "adx_threshold": 25.0
+  },
+  
+  "signal_processing": {
+    "clean_signals": true,
+    "min_signal_gap": 1,
+    "signal_confirmation_bars": 0
+  },
+  
+  "portfolio_parameters": {
+    "init_cash": 100000,
+    "fees": 0.001,
+    "slippage": 0.0005,
+    "freq": "1D"
+  },
+  
+  "optimization_ranges": {
+    "short_ma_window": [5, 10, 15],
+    "long_ma_window": [20, 30, 40],
+    "atr_period": [10, 14, 20],
+    "sl_atr_multiplier": [1.5, 2.0, 2.5],
+    "tp_atr_multiplier": [3.0, 4.0, 5.0]
+  },
+  
+  "data_parameters": {
+    "symbols": ["BTC/USDT"],
+    "timeframe": "1h",
+    "start_date": "2024-01-01",
+    "end_date": "2024-03-01",
+    "required_columns": ["open", "high", "low", "close", "volume"]
+  },
+  
+  "performance_targets": {
+    "min_sharpe_ratio": 0.8,
+    "max_drawdown": 0.25,
+    "min_win_rate": 0.35,
+    "min_profit_factor": 1.1
+  },
+  
+  "validation_rules": {
+    "min_data_points": 200,
+    "required_indicators": ["short_ma", "long_ma", "trend_ma", "atr"],
+    "parameter_constraints": {
+      "technical_parameters.short_ma_window < technical_parameters.long_ma_window": true,
+      "technical_parameters.long_ma_window < technical_parameters.trend_ma_window": true,
+      "technical_parameters.atr_period > 0": true,
+      "risk_management.sl_atr_multiplier > 0": true,
+      "risk_management.tp_atr_multiplier > 0": true
+    },
+    "data_quality_checks": {
+      "no_missing_values": true,
+      "no_duplicate_timestamps": true,
+      "positive_volume": true,
+      "valid_ohlc": true
+    }
+  },
+  
+  "development_settings": {
+    "purpose": "Fast iteration during development",
+    "signal_frequency": "high",
+    "test_duration": "short",
+    "performance_relaxed": true,
+    "notes": [
+      "Shorter MA windows (10/30/50) for more frequent signals",
+      "Relaxed performance targets for development testing",
+      "Smaller data requirements for faster execution",
+      "Optimized for signal generation validation"
+    ]
+  }
+} 

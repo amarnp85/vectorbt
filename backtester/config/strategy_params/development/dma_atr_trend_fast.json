@@ -1,0 +1,77 @@
+{
+    "_comment": "Fast variant of DMA ATR Trend strategy for shorter timeframes",
+    "short_ma_window": 5,
+    "long_ma_window": 20,
+    "trend_ma_window": 100,
+    "atr_period": 10,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "ma_type": "SMA",
+    "use_adx": false,
+    "adx_period": 14,
+    "adx_threshold": 25,
+    "clean_signals": true,
+    "strategy_name": "DMA ATR Trend Fast",
+    "strategy_class": "DMAATRTrendStrategy",
+    "description": "Fast moving average crossover strategy with ATR-based stops for shorter timeframes",
+    "version": "1.0.0",
+    "author": "Backtester System",
+    "category": "trend_following",
+    "technical_parameters": {
+        "short_ma_window": 5,
+        "short_ma_type": "SMA",
+        "long_ma_window": 20,
+        "long_ma_type": "SMA",
+        "trend_ma_window": 100,
+        "trend_ma_type": "SMA",
+        "atr_period": 10,
+        "enable_short_trades": true
+    },
+    "risk_management": {
+        "sl_atr_multiplier": 1.5,
+        "tp_atr_multiplier": 3.0,
+        "max_position_size": 1.0,
+        "risk_per_trade": 0.02,
+        "position_sizing": {
+            "_comment": "Example of volatility-based position sizing",
+            "method": "volatility_target",
+            "base_size": 0.80,
+            "min_position_size": 0.05,
+            "max_position_size": 1.0,
+            "volatility_target": 0.20,
+            "volatility_lookback": 15,
+            "atr_period": 10,
+            "atr_multiplier": 1.5,
+            "kelly_fraction": 0.25,
+            "kelly_lookback": 100
+        }
+    },
+    "trend_confirmation": {
+        "use_adx_filter": false,
+        "adx_period": 14,
+        "adx_threshold": 25.0
+    },
+    "signal_processing": {
+        "clean_signals": true,
+        "min_signal_gap": 1,
+        "signal_confirmation_bars": 0
+    },
+    "portfolio_parameters": {
+        "init_cash": 100000,
+        "fees": 0.001,
+        "slippage": 0.0005,
+        "freq": "1H",
+        "position_size_mode": "volatility_target",
+        "position_size_value": 0.80
+    },
+    "optimization_ranges": {
+        "short_ma_window": [3, 5, 7, 10],
+        "long_ma_window": [15, 20, 25, 30],
+        "atr_period": [7, 10, 14],
+        "sl_atr_multiplier": [1.0, 1.5, 2.0],
+        "tp_atr_multiplier": [2.0, 3.0, 4.0],
+        "adx_threshold": [20, 25, 30],
+        "position_sizing.volatility_target": [0.15, 0.20, 0.25, 0.30],
+        "position_sizing.volatility_lookback": [10, 15, 20, 30]
+    }
+} 

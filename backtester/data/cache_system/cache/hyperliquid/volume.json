@@ -1,4 +1,12 @@
 {
+  "_metadata": {
+    "last_updated_utc": "2025-05-22T18:59:21.527153+00:00",
+    "exchange_id": "hyperliquid",
+    "total_symbols": 316,
+    "cache_version": "2.0",
+    "migrated_from": "legacy",
+    "migration_timestamp": "2025-05-26T13:32:32.034257+00:00"
+  },
   "PURR/USDC": {
     "volume": 11017367.735719988,
     "updated": "2025-05-22T22:59:21.521040"

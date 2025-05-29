@@ -1,157 +1,150 @@
 # Data Module
 
-The data module provides a robust, efficient, and VectorBT-compatible data fetching and caching system for cryptocurrency backtesting. It handles multiple exchanges, timeframes, and provides seamless integration with VectorBT PRO's data structures.
-
-## Overview
-
-This module is designed to:
-- Fetch historical OHLCV data from multiple exchanges (Binance, Bybit, Hyperliquid)
-- Cache data locally for efficient reuse
-- Provide intelligent resampling to minimize API calls
-- Seamlessly integrate with VectorBT PRO's data structures
-- Handle both spot and futures/swap markets
-- Provide health checking and data quality validation
-
-## Architecture
-
-```
-backtester/data/
-├── fetching/           # Data fetching logic
-│   ├── core/          # Core components (modular design)
-│   │   ├── cache_handler.py      # Cache management
-│   │   ├── data_fetcher.py       # Main fetching logic
-│   │   ├── data_merger.py        # Merge multiple data sources
-│   │   ├── exchange_fetcher.py   # Exchange-specific fetching
-│   │   ├── fetch_logger.py       # Logging utilities
-│   │   ├── freshness_checker.py  # Data freshness validation
-│   │   ├── resampler.py          # Timeframe resampling
-│   │   ├── symbol_resolver.py    # Symbol filtering/resolution
-│   │   └── vbt_data_handler.py   # VBT data object creation
-│   └── data_fetcher_new.py       # Public API interface
-├── storage/            # Data storage layer
-│   └── data_storage.py           # HDF5/Parquet storage
-├── cache_system/       # Metadata caching
-│   ├── cache_manager.py          # Cache operations
-│   └── metadata_fetcher.py      # Exchange metadata fetching
-├── health_check/       # Data validation
-│   └── data_healthcheck.py      # Quality checks
-└── exchange_config.py  # Exchange configurations
-```
+The data module provides a simple, unified interface for fetching cryptocurrency OHLCV data with automatic caching, resampling, and exchange management.
 
 ## Quick Start
 
-### Basic Usage
-
 ```python
-from backtester.data.fetching.data_fetcher_new import fetch_data, quick_fetch
+from backtester.data import fetch_data, quick_fetch
 
-# Quick fetch for single symbol
-data = quick_fetch('BTC/USDT', days=365)
-print(data.close)  # Access close prices
+# Simplest usage - get BTC data
+btc_data = quick_fetch('BTC/USDT')
 
-# Fetch multiple symbols
-symbols = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT']
-data = fetch_data(symbols, timeframe='1d', start_date='2024-01-01')
+# Get multiple symbols  
+data = fetch_data(['BTC/USDT', 'ETH/USDT', 'BNB/USDT'])
 
-# Access VBT data features
+# Access VectorBT features
+close_prices = data.close
 returns = data.returns
 rsi = data.run('talib:RSI', 14)
 ```
 
-### VectorBT Integration
+## Main Entry Points
 
-The module provides native VectorBT Data objects with full feature support:
+The module provides 5 simple functions that handle everything automatically:
+
+1. **`fetch_data()`** - Primary interface for getting OHLCV data
+2. **`fetch_top_symbols()`** - Get top symbols by volume
+3. **`update_data()`** - Update cached data to latest
+4. **`quick_fetch()`** - Simple single-symbol fetch
+5. **`load_cached()`** - Load previously cached data
+
+That's it! These functions automatically handle:
+- ✅ Local caching for fast access
+- ✅ Intelligent resampling from lower timeframes
+- ✅ Exchange API calls only when necessary
+- ✅ Metadata updates (symbol lists, volumes)
+- ✅ Multi-exchange support
+- ✅ VectorBT integration
+
+## How It Works
+
+### Automatic Caching
 
 ```python
-# Magnet features
-open_prices = data.open
-close_prices = data.close
-high_prices = data.high
-low_prices = data.low
-volume = data.volume
+# First call - fetches from exchange and caches
+data = fetch_data(['BTC/USDT'], start_date='2024-01-01')
 
-# Calculations
-hlc3 = data.hlc3  # (High + Low + Close) / 3
-ohlc4 = data.ohlc4  # (Open + High + Low + Close) / 4
-
-# Indicators via run()
-sma = data.run('talib:SMA', 20)
-ema = data.run('talib:EMA', 20)
-bbands = data.run('talib:BBANDS', 20)
-
-# Multi-symbol handling
-btc_data = data.select('BTC/USDT')
-eth_data = data.select('ETH/USDT')
+# Second call - loads from cache (instant!)
+data = fetch_data(['BTC/USDT'], start_date='2024-01-01')
 ```
 
-## Core Features
-
-### 1. Intelligent Data Fetching
-
-The system uses a three-tier approach to minimize API calls:
-
-1. **Cache Check**: First checks local storage for existing data
-2. **Resampling**: Attempts to resample from lower timeframes if available
-3. **Exchange Fetch**: Only fetches from exchange when necessary
+### Smart Resampling
 
 ```python
-# This will use cache if available, resample if possible, or fetch from exchange
-data = fetch_data(['BTC/USDT'], timeframe='4h', use_cache=True, prefer_resampling=True)
+# If you have 1h data cached...
+hourly_data = fetch_data(['BTC/USDT'], timeframe='1h')
+
+# This resamples from cache instead of fetching!
+daily_data = fetch_data(['BTC/USDT'], timeframe='1d')
 ```
 
-### 2. Multi-Exchange Support
-
-Supports multiple exchanges with consistent interface:
+### Multi-Exchange Support
 
 ```python
-# Binance spot
-binance_data = fetch_data(['BTC/USDT'], exchange_id='binance', market_type='spot')
-
-# Bybit futures
-bybit_data = fetch_data(['BTCUSDT'], exchange_id='bybit', market_type='swap')
-
-# Hyperliquid perpetuals
-hyper_data = fetch_data(['BTC-USD-PERP'], exchange_id='hyperliquid', market_type='swap')
+# Each exchange works the same way
+binance_data = fetch_data(['BTC/USDT'], exchange='binance')
+bybit_data = fetch_data(['BTCUSDT'], exchange='bybit', market_type='swap')
 ```
 
-### 3. Top Symbols Discovery
+## Examples
 
-Fetch top symbols by volume:
+### Basic Usage
 
 ```python
+from backtester.data import fetch_data
+
+# Fetch daily data for multiple symbols
+data = fetch_data(
+    symbols=['BTC/USDT', 'ETH/USDT', 'BNB/USDT'],
+    timeframe='1d',
+    start_date='2023-01-01'
+)
+
+# Work with VectorBT data
+print(f"Symbols: {data.symbols}")
+print(f"Date range: {data.index[0]} to {data.index[-1]}")
+print(f"Latest BTC close: ${data.close['BTC/USDT'].iloc[-1]:,.2f}")
+```
+
+### Get Top Symbols
+
+```python
+from backtester.data import fetch_top_symbols
+
 # Get top 20 USDT pairs by volume
-top_data = fetch_top_symbols(limit=20, quote_currency='USDT')
+top_data = fetch_top_symbols(limit=20)
 print(f"Top symbols: {top_data.symbols}")
+
+# Analyze them
+returns = top_data.returns
+correlation = returns.corr()
 ```
 
-### 4. Data Updates
-
-Keep cached data fresh:
+### Quick Prototyping
 
 ```python
+from backtester.data import quick_fetch
+
+# Get last 30 days of hourly BTC data
+data = quick_fetch('BTC/USDT', days=30, timeframe='1h')
+
+# Run quick analysis
+sma_20 = data.run('talib:SMA', 20)
+rsi_14 = data.run('talib:RSI', 14)
+```
+
+### Keep Data Updated
+
+```python
+from backtester.data import update_data
+
 # Update all cached daily data
-success = update_data('binance', '1d')
+update_data(timeframe='1d')
 
 # Update specific symbols
-success = update_data('binance', '1h', symbols=['BTC/USDT', 'ETH/USDT'])
+update_data(timeframe='1h', symbols=['BTC/USDT', 'ETH/USDT'])
 ```
 
-### 5. Multi-Timeframe Analysis
+## Architecture (For Developers)
 
-Seamless resampling for multi-timeframe strategies:
+While the interface is simple, the module has a sophisticated architecture:
 
-```python
-# Fetch hourly data
-h1_data = fetch_data(['BTC/USDT'], timeframe='1h')
-
-# Resample to higher timeframes
-h4_data = h1_data.resample('4h')
-d1_data = h1_data.resample('1d')
+```
+backtester/data/
+├── simple_interface.py    # 🎯 Main entry point - start here!
+├── __init__.py           # Module exports
+├── fetching/             # Core fetching logic
+│   ├── data_fetcher_new.py
+│   └── core/            # Modular components
+├── storage/              # Data persistence
+├── cache_system/         # Metadata caching
+└── exchange_config.py    # Exchange settings
 ```
 
-## Storage System
+The complexity is hidden behind the simple interface. Users only need to know about the 5 main functions.
 
-### File Structure
+## Storage
 
 Data is stored in an organized hierarchy:
 
@@ -159,159 +152,48 @@ Data is stored in an organized hierarchy:
 vbt_data/
 ├── binance/
 │   ├── spot/
-│   │   ├── 1h/
+│   │   ├── 1d/
 │   │   │   ├── BTC_USDT.h5
 │   │   │   └── ETH_USDT.h5
-│   │   └── 1d/
-│   │       └── ...
+│   │   └── 1h/
 │   └── swap/
-│       └── ...
 └── cache/
-    ├── binance/
-    │   ├── volume.json
-    │   └── timestamps.json
-    └── blacklist.json
+    └── metadata.json
 ```
 
-### Storage Formats
+## Best Practices
 
-- **HDF5**: Default format for OHLCV data (efficient, compressed)
-- **Parquet**: Alternative format (better for cloud storage)
-- **JSON**: Metadata caching (volumes, timestamps, blacklists)
-
-## Health Checking
-
-The module includes comprehensive health checking:
-
-```python
-from backtester.data.health_check.data_healthcheck import HealthChecker
-
-# Run health check
-checker = HealthChecker()
-report = checker.generate_report()
-
-# Check specific aspects
-checker.check_data_quality(data)
-checker.check_missing_data(data)
-checker.check_price_anomalies(data)
-```
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# Cache settings
-CACHE_DIR=./backtester/data/cache_system/cache
-VBT_DATA_DIR=./vbt_data
-
-# Exchange-specific (optional)
-BINANCE_API_KEY=your_key
-BINANCE_API_SECRET=your_secret
-```
-
-### Exchange Configuration
-
-See `exchange_config.py` for exchange-specific settings:
-
-```python
-EXCHANGE_CONFIG = {
-    'binance': {
-        'ccxt_id': 'binance',
-        'rate_limit': 1200,
-        'timeframes': ['1m', '5m', '15m', '1h', '4h', '1d'],
-        'markets': ['spot', 'swap']
-    },
-    # ... other exchanges
-}
-```
-
-## Advanced Usage
-
-### Custom Data Enhancement
-
-Add technical indicators on fetch:
-
-```python
-from backtester.data.fetching.data_fetcher_new import create_enhanced_data
-
-# Fetch base data
-data = quick_fetch('BTC/USDT')
-
-# Enhance with technicals
-enhanced = create_enhanced_data(data, add_technicals=True)
-# Now has: enhanced._sma_20, enhanced._sma_50, enhanced._rsi_14
-```
-
-### Integration Testing
-
-Test VBT compatibility:
-
-```python
-from backtester.data.fetching.data_fetcher_new import test_vbt_integration
-
-data = fetch_data(['BTC/USDT'])
-results = test_vbt_integration(data)
-print(results)  # Shows which VBT features are working
-```
-
-### Performance Tips
-
-1. **Use Caching**: Always use `use_cache=True` unless you need fresh data
-2. **Prefer Resampling**: Set `prefer_resampling=True` to minimize API calls
-3. **Batch Requests**: Fetch multiple symbols in one call
-4. **Update Incrementally**: Use `update_data()` instead of re-fetching everything
+1. **Use the simple interface** - Don't dig into internal modules unless necessary
+2. **Let caching work** - The default settings are optimized
+3. **Fetch multiple symbols together** - More efficient than individual calls
+4. **Use `quick_fetch()` for experiments** - Perfect for Jupyter notebooks
+5. **Update incrementally** - Use `update_data()` instead of re-fetching everything
 
 ## Troubleshooting
 
-### Common Issues
+```python
+from backtester.data import get_cache_info
 
-1. **Missing Data**
-   ```python
-   # Check what's in cache
-   from backtester.data.fetching.data_fetcher_new import get_storage_info
-   print(get_storage_info())
-   ```
+# See what's cached
+info = get_cache_info()
+print(info)
 
-2. **Symbol Not Found**
-   ```python
-   # Check available symbols
-   from backtester.data.cache_system.metadata_fetcher import fetch_metadata
-   metadata = fetch_metadata('binance')
-   print([s for s in metadata['symbols'] if 'BTC' in s][:10])
-   ```
+# Enable debug logging
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
 
-3. **VBT Integration Issues**
-   ```python
-   # Run integration test
-   python backtester/data/test_vbt_integration.py
-   ```
+## See Also
 
-## API Reference
+- [USAGE_GUIDE.md](USAGE_GUIDE.md) - Detailed usage examples
+- [simple_interface.py](simple_interface.py) - Main entry point source code
+- VectorBT Pro documentation for data object methods
 
-See the module docstrings for detailed API documentation. Key functions:
+## Summary
 
-- `fetch_data()`: Main data fetching function
-- `quick_fetch()`: Simplified single-symbol fetching
-- `fetch_top_symbols()`: Get top symbols by volume
-- `update_data()`: Update cached data
-- `load_latest()`: Load from cache without fetching
-- `test_vbt_integration()`: Test VBT compatibility
+The data module makes data fetching simple:
+- Import `fetch_data` and related functions
+- Call them with your requirements
+- Everything else happens automatically
 
-## Contributing
-
-When adding new features:
-
-1. Maintain VBT Data compatibility
-2. Add appropriate logging
-3. Update cache metadata appropriately
-4. Include error handling
-5. Add tests in `test_vbt_integration.py`
-
-## Future Enhancements
-
-- [ ] Real-time data streaming
-- [ ] More exchange integrations
-- [ ] Advanced data quality metrics
-- [ ] Automated data validation
-- [ ] Cloud storage backends 
+No need to understand the internal architecture - just use the simple interface! 

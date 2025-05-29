@@ -1,58 +1,92 @@
 """
-Data-related modules for the backtester package.
+Data Module - Simplified Interface for VectorBT Pro Data Management
 
-This package contains organized modules for handling exchange data, market data fetching,
-cache management, and data storage using VectorBT Pro's native capabilities.
+This module provides a clean, simple interface for all data operations in the backtester.
+It automatically handles caching, resampling, and exchange fetching.
 
-VBT DATA APPROACH:
-This package uses VectorBT Pro's built-in data persistence and caching capabilities:
-- Preserves complete VBT metadata and functionality
-- Uses VBT's native pickle storage for optimal performance
-- Leverages VBT's built-in caching and optimization
-- Provides seamless OHLCV access via data.get() methods
-- Supports VBT's native update() capabilities
+MAIN ENTRY POINTS:
+    - fetch_data(): Get historical OHLCV data (primary interface)
+    - fetch_top_symbols(): Get top symbols by volume
+    - update_data(): Update cached data to latest
+    - quick_fetch(): Simple single-symbol fetch
+    - load_cached(): Load previously cached data
 
-All data fetching follows the project guidelines of using VectorBT Pro's native
-functionality. API keys are NOT required for OHLCV data fetching operations.
+Example Usage:
+    >>> from backtester.data import fetch_data, quick_fetch
+    >>> 
+    >>> # Quick single symbol fetch
+    >>> btc_data = quick_fetch('BTC/USDT', days=30)
+    >>> 
+    >>> # Multi-symbol fetch with options
+    >>> data = fetch_data(
+    ...     symbols=['BTC/USDT', 'ETH/USDT'],
+    ...     timeframe='1h',
+    ...     start_date='2024-01-01'
+    ... )
+    >>> 
+    >>> # Access VBT features
+    >>> close_prices = data.close
+    >>> returns = data.returns
+    >>> rsi = data.run('talib:RSI', 14)
+
+The module uses VectorBT Pro's native data persistence and caching capabilities,
+preserving complete VBT metadata and functionality for optimal performance.
 """
 
-# Exchange configuration functions (informational utilities)
+# =============================================================================
+# PRIMARY INTERFACE - Use these functions for all data operations
+# =============================================================================
+from backtester.data.simple_interface import (
+    fetch_data,          # Main data fetching function
+    fetch_top_symbols,   # Get top symbols by volume
+    update_data,         # Update cached data
+    quick_fetch,         # Simple single-symbol fetch
+    load_cached,         # Load from cache without fetching
+    get_cache_info,      # Get cache statistics
+    # Aliases
+    get_data,           # Alias for fetch_data
+    get_top_symbols,    # Alias for fetch_top_symbols
+)
+
+# =============================================================================
+# EXCHANGE UTILITIES - For exchange information and configuration
+# =============================================================================
 from backtester.data.exchange_config import (
     list_available_exchanges,
-    get_exchange_info, 
-    get_exchange_timeframes
+    get_exchange_info,
+    get_exchange_timeframes,
 )
 
-# Exchange settings - no longer needed, VBT handles this natively
+# =============================================================================
+# ADVANCED FEATURES - For specialized use cases
+# =============================================================================
+# Direct access to storage system
+from backtester.data.storage.data_storage import data_storage, DataStorage
 
-# Cache system (organized module for metadata and volume data)
-from backtester.data.cache_system import (
-    cache_manager,
-    data_fetcher
-)
+# Cache management utilities
+from backtester.data.cache_system import cache_manager, data_fetcher
 
-# Data fetching and storage
+# Low-level fetching functions (use simple_interface functions instead)
 from backtester.data.fetching.data_fetcher_new import (
-    fetch_data,
-    fetch_top_symbols,
-    update_data,
     get_storage_info,
-    fetch_ohlcv
+    fetch_ohlcv,  # Alias for fetch_data
 )
 
-from backtester.data.storage.data_storage import (
-    data_storage,
-    DataStorage
-)
-
-# BACKWARD COMPATIBILITY ALIASES
-# These redirect old function calls to current implementations
+# =============================================================================
+# LEGACY COMPATIBILITY - Deprecated, use primary interface instead
+# =============================================================================
 def fetch_multi_exchange(symbols, exchange_ids, **kwargs):
     """
-    Legacy compatibility function - simplified multi-exchange fetch.
-    
     DEPRECATED: Use fetch_data() for each exchange instead.
+    
+    Legacy compatibility function for multi-exchange fetching.
     """
+    import warnings
+    warnings.warn(
+        "fetch_multi_exchange is deprecated. Use fetch_data() for each exchange.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     results = {}
     for exchange_id in exchange_ids:
         data = fetch_data(symbols, exchange_id, **kwargs)
@@ -60,72 +94,86 @@ def fetch_multi_exchange(symbols, exchange_ids, **kwargs):
             results[exchange_id] = data
     return results
 
-def fetch_by_market_type(exchange_id, market_type='spot', quote_currency='USDT', limit=20, **kwargs):
+
+def fetch_by_market_type(
+    exchange_id, market_type="spot", quote_currency="USDT", limit=20, **kwargs
+):
     """
-    Legacy compatibility function - redirects to volume-based selection.
-    
     DEPRECATED: Use fetch_top_symbols() instead.
+    
+    Legacy compatibility function for market type filtering.
     """
+    import warnings
+    warnings.warn(
+        "fetch_by_market_type is deprecated. Use fetch_top_symbols() instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
     return fetch_top_symbols(
-        exchange_id=exchange_id,
+        exchange=exchange_id,
         quote_currency=quote_currency,
         market_type=market_type,
         limit=limit,
-        **kwargs
     )
+
 
 def fetch_top_symbols_with_auto_cache_update(exchange_id, **kwargs):
     """
-    Legacy compatibility function - redirects to current implementation.
-    
     DEPRECATED: Use fetch_top_symbols() instead.
+    
+    Legacy compatibility function.
     """
-    return fetch_top_symbols(exchange_id=exchange_id, **kwargs)
+    import warnings
+    warnings.warn(
+        "fetch_top_symbols_with_auto_cache_update is deprecated. Use fetch_top_symbols().",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return fetch_top_symbols(exchange=exchange_id, **kwargs)
 
-# Legacy storage compatibility
-class OptimizedHDFStorage:
-    """Legacy compatibility class - redirects to VBT data storage."""
-    
-    def __init__(self):
-        import warnings
-        warnings.warn(
-            "OptimizedHDFStorage is deprecated. Use DataStorage instead.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-        self._storage = data_storage
-    
-    def __getattr__(self, name):
-        # Redirect all calls to VBT data storage
-        return getattr(self._storage, name)
 
-# Create legacy compatibility instance
-optimized_hdf_storage = OptimizedHDFStorage()
+# Legacy storage compatibility removed - use DataStorage directly
 
-# Expose key functionality for easy imports
+# =============================================================================
+# CLI TOOLS - Command-line utilities
+# =============================================================================
+try:
+    from backtester.data import cli
+except ImportError:
+    cli = None
+
+# =============================================================================
+# PUBLIC API
+# =============================================================================
 __all__ = [
-    # Exchange configuration
-    'list_available_exchanges',
-    'get_exchange_info',
-    'get_exchange_timeframes',
+    # Primary Interface (USE THESE)
+    "fetch_data",
+    "fetch_top_symbols", 
+    "update_data",
+    "quick_fetch",
+    "load_cached",
+    "get_cache_info",
+    "get_data",  # Alias
+    "get_top_symbols",  # Alias
     
-    # Cache system
-    'cache_manager',
-    'data_fetcher',
+    # Exchange utilities
+    "list_available_exchanges",
+    "get_exchange_info",
+    "get_exchange_timeframes",
     
-    # Data functionality
-    'fetch_data',
-    'fetch_top_symbols', 
-    'update_data',
-    'get_storage_info',
-    'fetch_ohlcv',
-    'data_storage',
-    'DataStorage',
+    # Advanced features
+    "data_storage",
+    "DataStorage",
+    "cache_manager",
+    "data_fetcher",
     
-    # Legacy compatibility (DEPRECATED)
-    'fetch_multi_exchange', 
-    'fetch_by_market_type',
-    'fetch_top_symbols_with_auto_cache_update',
-    'optimized_hdf_storage',
-    'OptimizedHDFStorage',
+    # CLI tools
+    "cli",
+    
+    # Legacy (avoid using)
+    "fetch_multi_exchange",
+    "fetch_by_market_type",
+    "fetch_top_symbols_with_auto_cache_update",
+    "get_storage_info",
+    "fetch_ohlcv",
 ]

@@ -1,0 +1,37 @@
+{
+  "symbol": "BTC/USDT",
+  "timeframe": "4h",
+  "optimization_date": "2025-05-28T17:25:41.528818",
+  "statistics": {
+    "total_combinations": 1200,
+    "valid_combinations": 1200,
+    "success_rate": 100.0,
+    "best_sharpe": 0.9304137172026797,
+    "worst_sharpe": 0.12279604931877891,
+    "mean_sharpe": 0.560750368516337,
+    "std_sharpe": 0.18701000649324667,
+    "optimization_time": 46.41745901107788
+  },
+  "best_parameters": {
+    "fast_window": 10,
+    "slow_window": 80,
+    "atr_window": 10,
+    "atr_multiplier_sl": 1.5,
+    "atr_multiplier_tp": 3.0,
+    "symbol": "BTC/USDT"
+  },
+  "performance_metrics": {
+    "sharpe_ratio": 0.9304137172026797,
+    "total_return": 19.877454460520187,
+    "max_drawdown": -0.5553510280022089,
+    "win_rate": 0.3343465045592705,
+    "total_trades": 329,
+    "profit_factor": 1.1374613600529175
+  },
+  "date_range": {
+    "start_date": "2020-01-01",
+    "end_date": "2023-12-30",
+    "description": "Recent 18-month period for current market analysis",
+    "type": "custom"
+  }
+}

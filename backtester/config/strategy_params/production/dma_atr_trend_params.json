@@ -1,0 +1,121 @@
+{
+  "strategy_name": "DMA-ATR-Trend Strategy",
+  "strategy_class": "DMAATRTrendStrategy",
+  "description": "Volatility-Adaptive Dual Moving Average Crossover with Trend Confirmation and Dynamic Risk Management",
+  "version": "1.0.0",
+  "author": "Backtester System",
+  "category": "trend_following",
+  
+  "technical_parameters": {
+    "short_ma_window": 20,
+    "short_ma_type": "SMA",
+    "long_ma_window": 50,
+    "long_ma_type": "SMA",
+    "trend_ma_window": 200,
+    "trend_ma_type": "SMA",
+    "atr_period": 14,
+    "enable_short_trades": true
+  },
+  
+  "risk_management": {
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 4.0,
+    "max_position_size": 1.0,
+    "risk_per_trade": 0.02,
+    "position_sizing": {
+      "method": "fixed_percent",
+      "base_size": 0.95,
+      "min_position_size": 0.01,
+      "max_position_size": 1.0,
+      "volatility_target": 0.15,
+      "volatility_lookback": 20,
+      "atr_period": 14,
+      "atr_multiplier": 2.0,
+      "kelly_fraction": 0.25,
+      "kelly_lookback": 252
+    }
+  },
+  
+  "trend_confirmation": {
+    "use_adx_filter": false,
+    "adx_period": 14,
+    "adx_threshold": 25.0
+  },
+  
+  "signal_processing": {
+    "clean_signals": true,
+    "min_signal_gap": 1,
+    "signal_confirmation_bars": 0
+  },
+  
+  "portfolio_parameters": {
+    "init_cash": 100000,
+    "fees": 0.001,
+    "slippage": 0.0005,
+    "freq": "1D",
+    "position_size_mode": "fixed_percent",
+    "position_size_value": 0.95
+  },
+  
+  "optimization_ranges": {
+    "short_ma_window": [10, 15, 20, 25, 30],
+    "long_ma_window": [40, 50, 60, 70, 80],
+    "atr_period": [10, 14, 20],
+    "sl_atr_multiplier": [1.5, 2.0, 2.5, 3.0],
+    "tp_atr_multiplier": [3.0, 4.0, 5.0, 6.0],
+    "adx_threshold": [20, 25, 30, 35],
+    "position_sizing.base_size": [0.5, 0.75, 0.95, 1.0],
+    "position_sizing.volatility_target": [0.10, 0.15, 0.20, 0.25],
+    "position_sizing.atr_multiplier": [1.5, 2.0, 2.5, 3.0]
+  },
+  
+  "portfolio_optimization": {
+    "_comment": "Multi-symbol portfolio optimization settings - uncomment and customize as needed",
+    "_optimization_level": "hierarchical",
+    "_weight_optimization_method": "risk_parity",
+    "_rebalance_freq": "M",
+    "_lookback_period": "6M",
+    "_min_weight": 0.05,
+    "_max_weight": 0.4,
+    "_max_portfolio_volatility": 0.15,
+    "_target_return": null,
+    "_transaction_cost": 0.001,
+    "_rebalance_threshold": 0.05,
+    "_use_regime_detection": false,
+    "_risk_aversion": 1.0,
+    "_utility_function": "mean_variance"
+  },
+  
+  "data_parameters": {
+    "symbols": ["BTC/USDT", "ETH/USDT"],
+    "timeframe": "1h",
+    "start_date": "2020-01-01",
+    "end_date": "2023-12-31",
+    "required_columns": ["open", "high", "low", "close", "volume"]
+  },
+  
+  "performance_targets": {
+    "min_sharpe_ratio": 1.0,
+    "max_drawdown": 0.20,
+    "min_win_rate": 0.40,
+    "min_profit_factor": 1.2
+  },
+  
+  "validation_rules": {
+    "min_data_points": 500,
+    "required_indicators": ["short_ma", "long_ma", "trend_ma", "atr"],
+    "parameter_constraints": {
+      "technical_parameters.short_ma_window < technical_parameters.long_ma_window": true,
+      "technical_parameters.long_ma_window < technical_parameters.trend_ma_window": true,
+      "technical_parameters.atr_period > 0": true,
+      "risk_management.sl_atr_multiplier > 0": true,
+      "risk_management.tp_atr_multiplier > 0": true
+    },
+    "data_quality_checks": {
+      "no_missing_values": true,
+      "no_duplicate_timestamps": true,
+      "positive_volume": true,
+      "valid_ohlc": true
+    }
+  }
+} 

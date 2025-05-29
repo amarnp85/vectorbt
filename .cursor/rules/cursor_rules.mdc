@@ -1,62 +1,151 @@
 ---
 description: Guidelines for creating and maintaining Cursor rules to ensure consistency and effectiveness.
-globs: .cursor/rules/*.mdc
-alwaysApply: true
+globs: 
+alwaysApply: false
+---
+# Cursor Rules Guidelines
+
+## Rule Structure Requirements
+
+All cursor rules must follow this structure:
+
+```markdown
+---
+description: Clear, one-line description of what the rule enforces
+globs: path/to/files/*.ext, other/path/**/*
+alwaysApply: boolean
 ---
 
-- **Required Rule Structure:**
-  ```markdown
-  ---
-  description: Clear, one-line description of what the rule enforces
-  globs: path/to/files/*.ext, other/path/**/*
-  alwaysApply: boolean
-  ---
+# Rule Title
 
-  - **Main Points in Bold**
-    - Sub-points with details
-    - Examples and explanations
-  ```
+## Main Sections
+- **Key Principles in Bold**
+  - Supporting details
+  - Specific examples
+```
 
-- **File References:**
-  - Use `[filename](mdc:path/to/file)` ([filename](mdc:filename)) to reference files
-  - Example: [prisma.mdc](mdc:.cursor/rules/prisma.mdc) for rule references
-  - Example: [schema.prisma](mdc:prisma/schema.prisma) for code references
+## File References
 
-- **Code Examples:**
-  - Use language-specific code blocks
-  ```typescript
-  // ✅ DO: Show good examples
-  const goodExample = true;
-  
-  // ❌ DON'T: Show anti-patterns
-  const badExample = false;
-  ```
+When referencing files in rules:
+- Use `[filename](mdc:path/to/file)` format
+- Example: [backtester_core.mdc](mdc:.cursor/rules/backtester_core.mdc) for rule references
+- Example: [base.py](mdc:backtester/strategies/base.py) for code references
 
-- **Rule Content Guidelines:**
-  - Start with high-level overview
-  - Include specific, actionable requirements
-  - Show examples of correct implementation
-  - Reference existing code when possible
-  - Keep rules DRY by referencing other rules
+## Code Examples
 
-- **Rule Maintenance:**
-  - Update rules when new patterns emerge
-  - Add examples from actual codebase
-  - Remove outdated patterns
-  - Cross-reference related rules
+Always include practical code examples:
 
-- **Best Practices:**
-  - Use bullet points for clarity
-  - Keep descriptions concise
-  - Include both DO and DON'T examples
-  - Reference actual code over theoretical examples
-  - Use consistent formatting across rules 
-  - Prioritise clean code, 'less is more'.
-  - Use uv package to install any package - 'uv pip install...'
+```python
+# ✅ DO: Show correct VBT usage
+portfolio = vbt.Portfolio.from_signals(
+    data.close,
+    entries=entries,
+    exits=exits,
+    **config.to_dict()
+)
 
-- **Vectorbtpro Library:**
-  - When working within a specific task, prioritise rewrite of an existing script, especially when related to a particular subtask. Only create new scripts when necessary, to improve code organisation, modularity and if the script is required for independent functions.
-  - Prioritise the use of the 'vectorbtpro' library methods, classes and functions.
-  - Only use 'CCXT' or other exchange accessor libraries, for tasks requiring fetching of metadata for symbols.
-  - All data objects should be created and accessible with the vbt.data oject methods available in vectorbtpro. We should not be relying on pandas.
-  - Before attempting to implement something within vectorbtpro, ALWAYS check the terminal for what commands are available, and refer to the vectorbtpro documentation [api_data_custom_ccxt.md](mdc:vectorbtpro_docs/api_data_custom_ccxt.md) [cookbook_data.md](mdc:vectorbtpro_docs/cookbook_data.md) [api_data_custom_hdf.md](mdc:vectorbtpro_docs/api_data_custom_hdf.md) [features_data.md](mdc:vectorbtpro_docs/features_data.md) [documentation_data.md](mdc:vectorbtpro_docs/documentation_data.md) [cookbook_indexing.md](mdc:vectorbtpro_docs/cookbook_indexing.md) [cookbook_datetime.md](mdc:vectorbtpro_docs/cookbook_datetime.md)
+# ❌ DON'T: Show anti-patterns
+# Custom portfolio tracking implementation
+```
+
+## Rule Content Guidelines
+
+### Structure
+1. **Start with Philosophy**: Core principles and approach
+2. **Provide Context**: When and why to apply the rule
+3. **Show Examples**: Real code from the project
+4. **Include Anti-patterns**: What to avoid
+5. **Reference Documentation**: Link to vectorbtpro_docs when relevant
+
+### Best Practices
+- Keep rules actionable and specific
+- Use actual code examples from the codebase
+- Focus on VectorBT Pro best practices
+- Minimize custom implementations
+- Emphasize the "less is more" philosophy
+
+## Rule Categories
+
+### Core Rules
+- **backtester_core.mdc**: Main VectorBT Pro framework rules
+- **dev_workflow.mdc**: Development process and patterns
+- **self_improve.mdc**: Rule improvement guidelines
+
+### Specialized Rules (create as needed)
+- Strategy-specific patterns
+- Performance optimization techniques
+- Testing methodologies
+
+## Rule Maintenance
+
+### When to Update
+- New VectorBT Pro features discovered
+- Better patterns identified in codebase
+- Performance improvements found
+- Common mistakes observed
+
+### Update Process
+1. Identify the pattern or anti-pattern
+2. Find real examples in the codebase
+3. Update the appropriate rule file
+4. Ensure consistency across all rules
+
+## Writing Style
+
+### Clarity
+- Use clear, concise language
+- Avoid jargon unless necessary
+- Define technical terms when first used
+
+### Formatting
+- Use bullet points for lists
+- Bold key concepts
+- Use code blocks liberally
+- Keep paragraphs short
+
+### Examples
+```markdown
+### Feature Name
+Brief description of the feature and when to use it.
+
+# ✅ DO: Correct approach
+actual_working_code_example
+
+# ❌ DON'T: Common mistake
+problematic_code_pattern
+
+**Note**: Additional context or VBT documentation reference
+```
+
+## Cross-References
+
+### Internal Links
+- Link between related rules
+- Reference specific sections
+- Connect patterns to examples
+
+### External References
+- Link to vectorbtpro_docs/
+- Reference official VBT documentation
+- Include relevant examples/
+
+## Quality Checklist
+
+Before finalizing a rule:
+- [ ] Clear, actionable guidance
+- [ ] Real code examples included
+- [ ] Anti-patterns documented
+- [ ] VBT best practices emphasized
+- [ ] Consistent with other rules
+- [ ] References updated
+- [ ] No unnecessary complexity
+
+## Common Pitfalls
+
+1. **Over-documenting**: Keep rules focused and practical
+2. **Theoretical examples**: Use real code from the project
+3. **Outdated patterns**: Regularly review and update
+4. **Missing context**: Explain when and why to apply rules
+5. **Ignoring VBT features**: Always check VBT capabilities first
+
+Remember: **Rules should make development faster and more consistent, not slower!**

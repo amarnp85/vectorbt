@@ -5,3 +5,17 @@ __pycache__/
 *.pyd
 *.pyw
 *.pyz
+
+# Jupyter-related files to prevent extension conflicts
+*.ipynb
+.jupyter/
+.ipynb_checkpoints/
+jupyter_config/
+.venv/bin/jupyter*
+.venv/etc/jupyter/
+.venv/share/jupyter/
+.venv/lib/python*/site-packages/jupyter*/
+.venv/lib/python*/site-packages/ipykernel/
+.venv/lib/python*/site-packages/ipywidgets/
+.venv/lib/python*/site-packages/nbconvert/
+.venv/lib/python*/site-packages/nbformat/

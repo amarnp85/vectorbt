@@ -1,0 +1,123 @@
+{
+  "strategy_name": "Mean Reversion Strategy",
+  "strategy_class": "MeanReversionStrategy",
+  "description": "Mean reversion strategy using Bollinger Bands and RSI with regime-based filters",
+  "version": "1.0.0",
+  "author": "Backtester System",
+  "category": "mean_reversion",
+  
+  "technical_parameters": {
+    "bb_period": 20,
+    "bb_std": 2,
+    "rsi_period": 14,
+    "rsi_oversold": 30,
+    "rsi_overbought": 70,
+    "regime_filter": true,
+    "atr_multiplier_sl": 2.0,
+    "atr_multiplier_tp": 3.0
+  },
+  
+  "risk_management": {
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 3.0,
+    "max_position_size": 1.0,
+    "risk_per_trade": 0.02,
+    "max_drawdown_limit": 0.20
+  },
+  
+  "entry_conditions": {
+    "bb_percent_long": 0.2,
+    "bb_percent_short": 0.8,
+    "price_buffer": 0.02,
+    "volume_filter": false,
+    "min_volume": 1000000
+  },
+  
+  "exit_conditions": {
+    "exit_at_middle_band": true,
+    "rsi_neutral_exit": 50,
+    "time_based_exit": false,
+    "max_hold_period": 20
+  },
+  
+  "signal_processing": {
+    "clean_signals": true,
+    "min_signal_gap": 2,
+    "signal_confirmation_bars": 0,
+    "allow_pyramiding": false
+  },
+  
+  "portfolio_parameters": {
+    "init_cash": 100000,
+    "fees": 0.001,
+    "slippage": 0.0005,
+    "freq": "1D"
+  },
+  
+  "optimization_ranges": {
+    "bb_period": [15, 20, 25, 30],
+    "bb_std": [1.5, 2.0, 2.5, 3.0],
+    "rsi_period": [10, 14, 18, 21],
+    "rsi_oversold": [20, 25, 30, 35],
+    "rsi_overbought": [65, 70, 75, 80],
+    "atr_multiplier_sl": [1.5, 2.0, 2.5, 3.0],
+    "atr_multiplier_tp": [2.0, 3.0, 4.0, 5.0]
+  },
+  
+  "vbt_optimization": {
+    "bb_period": {"type": "range", "start": 15, "stop": 31, "step": 5},
+    "rsi_period": {"type": "list", "values": [10, 14, 18, 21]},
+    "bb_std": {"type": "linspace", "start": 1.5, "stop": 3.0, "num": 4}
+  },
+  
+  "data_parameters": {
+    "symbols": ["BTC/USDT", "ETH/USDT"],
+    "timeframe": "4h",
+    "start_date": "2021-01-01",
+    "end_date": "2023-12-31",
+    "required_columns": ["open", "high", "low", "close", "volume"]
+  },
+  
+  "performance_targets": {
+    "min_sharpe_ratio": 0.8,
+    "max_drawdown": 0.20,
+    "min_win_rate": 0.50,
+    "min_profit_factor": 1.3,
+    "min_total_return": 0.10
+  },
+  
+  "validation_rules": {
+    "min_data_points": 500,
+    "required_indicators": ["bb_upper", "bb_middle", "bb_lower", "rsi"],
+    "parameter_constraints": {
+      "technical_parameters.bb_period > 0": true,
+      "technical_parameters.bb_std > 0": true,
+      "technical_parameters.rsi_period > 0": true,
+      "technical_parameters.rsi_oversold < 50": true,
+      "technical_parameters.rsi_overbought > 50": true,
+      "technical_parameters.rsi_oversold < technical_parameters.rsi_overbought": true,
+      "risk_management.sl_atr_multiplier > 0": true,
+      "risk_management.tp_atr_multiplier > 0": true
+    },
+    "data_quality_checks": {
+      "no_missing_values": true,
+      "no_duplicate_timestamps": true,
+      "positive_volume": true,
+      "valid_ohlc": true
+    }
+  },
+  
+  "metadata": {
+    "created_date": "2024-01-01",
+    "last_modified": "2024-01-01",
+    "tags": ["mean_reversion", "bollinger_bands", "rsi", "regime_filter"],
+    "complexity": "medium",
+    "market_types": ["crypto", "forex", "stocks"],
+    "timeframes": ["1h", "4h", "1D"],
+    "notes": [
+      "Works best in ranging markets",
+      "Regime filter helps avoid trending markets",
+      "Consider tighter bands in low volatility environments"
+    ]
+  }
+} 

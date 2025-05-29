@@ -1,4 +1,12 @@
 {
+  "_metadata": {
+    "last_updated_utc": "2025-05-26T14:19:54.189977+00:00",
+    "exchange_id": "bybit",
+    "total_symbols": 942,
+    "cache_version": "2.0",
+    "migrated_from": "legacy",
+    "migration_timestamp": "2025-05-26T14:20:11.334830+00:00"
+  },
   "HNT/USDT": {
     "volume": 376759.904341,
     "updated": "2025-05-22T22:58:59.547798"
@@ -105,10 +113,6 @@
   },
   "WEMIX/USDT": {
     "volume": 128798.2216732,
-    "updated": "2025-05-22T22:58:59.547798"
-  },
-  "DAI/USDT": {
-    "volume": 3468981.617462,
     "updated": "2025-05-22T22:58:59.547798"
   },
   "STX/USDT": {
@@ -345,10 +349,6 @@
   },
   "YFI/USDT": {
     "volume": 152871.2749,
-    "updated": "2025-05-22T22:58:59.547798"
-  },
-  "USDC/USDT": {
-    "volume": 199287881.935597,
     "updated": "2025-05-22T22:58:59.547798"
   },
   "AVA/USDT": {
@@ -1177,10 +1177,6 @@
   },
   "KAS/USDT": {
     "volume": 9457983.5430282,
-    "updated": "2025-05-22T22:58:59.547798"
-  },
-  "TUSD/USDT": {
-    "volume": 461936.594388,
     "updated": "2025-05-22T22:58:59.547798"
   },
   "RPK/USDT": {
@@ -3553,10 +3549,6 @@
   },
   "UNI/USDT:USDT": {
     "volume": 57651549.9149,
-    "updated": "2025-05-22T22:58:59.547798"
-  },
-  "USDC/USDT:USDT": {
-    "volume": 416013.0509,
     "updated": "2025-05-22T22:58:59.547798"
   },
   "USDE/USDT:USDT": {

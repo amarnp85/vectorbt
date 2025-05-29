@@ -1,0 +1,50 @@
+{
+    "strategy_type": "dma_atr_trend",
+    "short_ma_window": 10,
+    "long_ma_window": 30,
+    "trend_ma_window": 50,
+    "atr_period": 14,
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 4.0,
+    "ma_type": "SMA",
+    "use_adx": false,
+    "clean_signals": true,
+    "technical_parameters": {
+        "short_ma_window": 10,
+        "short_ma_type": "SMA",
+        "long_ma_window": 30,
+        "long_ma_type": "SMA",
+        "trend_ma_window": 50,
+        "trend_ma_type": "SMA",
+        "atr_period": 14,
+        "enable_short_trades": true
+    },
+    "risk_management": {
+        "sl_atr_multiplier": 2.0,
+        "tp_atr_multiplier": 4.0,
+        "max_position_size": 1.0,
+        "risk_per_trade": 0.02
+    },
+    "trend_confirmation": {
+        "use_adx_filter": false,
+        "adx_period": 14,
+        "adx_threshold": 25.0
+    },
+    "signal_processing": {
+        "clean_signals": true,
+        "min_signal_gap": 1,
+        "signal_confirmation_bars": 0
+    },
+    "portfolio_parameters": {
+        "init_cash": 100000,
+        "fees": 0.001,
+        "slippage": 0.0005,
+        "freq": "1D"
+    },
+    "optimization": {
+        "short_ma_window": [5, 10, 15],
+        "long_ma_window": [20, 30, 40],
+        "sl_atr_multiplier": [1.5, 2.0, 2.5],
+        "tp_atr_multiplier": [3.0, 4.0, 5.0]
+    }
+} 

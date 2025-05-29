@@ -1,0 +1,141 @@
+{
+  "strategy_name": "Multi-Timeframe DMA ATR Strategy",
+  "strategy_class": "MTF_DMA_ATR_Strategy",
+  "description": "Multi-timeframe trend following strategy with MA crossovers and ATR-based stops",
+  "version": "1.0.0",
+  "author": "Backtester System",
+  "category": "trend_following",
+  
+  "technical_parameters": {
+    "fast_window": 10,
+    "slow_window": 30,
+    "atr_window": 14,
+    "atr_multiplier_sl": 2.0,
+    "atr_multiplier_tp": 3.0,
+    "use_mtf_confirmation": true,
+    "trend_alignment_threshold": 0.3
+  },
+  
+  "mtf_config": {
+    "base_timeframe": "1h",
+    "confirmation_timeframes": ["4h", "1d"],
+    "timeframe_weights": {
+      "1h": 1.0,
+      "4h": 1.5,
+      "1d": 2.0
+    },
+    "alignment_threshold": 0.3,
+    "use_higher_tf_trend": true,
+    "momentum_confluence_threshold": 0.1
+  },
+  
+  "risk_management": {
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 3.0,
+    "max_position_size": 1.0,
+    "risk_per_trade": 0.02,
+    "max_drawdown_limit": 0.20,
+    "scale_by_alignment": true
+  },
+  
+  "trend_confirmation": {
+    "use_adx_filter": false,
+    "adx_period": 14,
+    "adx_threshold": 25.0,
+    "require_all_timeframes": false,
+    "min_aligned_timeframes": 2
+  },
+  
+  "signal_processing": {
+    "clean_signals": true,
+    "min_signal_gap": 3,
+    "signal_confirmation_bars": 1,
+    "allow_pyramiding": false,
+    "mtf_signal_weight": "exponential"
+  },
+  
+  "portfolio_parameters": {
+    "init_cash": 100000,
+    "fees": 0.001,
+    "slippage": 0.0005,
+    "freq": "1D"
+  },
+  
+  "optimization_ranges": {
+    "fast_window": [5, 10, 15, 20],
+    "slow_window": [20, 30, 40, 50],
+    "atr_window": [10, 14, 20],
+    "trend_alignment_threshold": [0.2, 0.3, 0.4, 0.5],
+    "atr_multiplier_sl": [1.5, 2.0, 2.5],
+    "atr_multiplier_tp": [2.5, 3.0, 4.0, 5.0]
+  },
+  
+  "vbt_optimization": {
+    "fast_window": {"type": "range", "start": 5, "stop": 21, "step": 5},
+    "slow_window": {"type": "range", "start": 20, "stop": 51, "step": 10},
+    "trend_alignment_threshold": {"type": "linspace", "start": 0.2, "stop": 0.5, "num": 4}
+  },
+  
+  "data_parameters": {
+    "symbols": ["BTC/USDT", "ETH/USDT"],
+    "timeframes": ["1h", "4h", "1d"],
+    "base_timeframe": "1h",
+    "start_date": "2021-01-01",
+    "end_date": "2023-12-31",
+    "required_columns": ["open", "high", "low", "close", "volume"]
+  },
+  
+  "performance_targets": {
+    "min_sharpe_ratio": 1.3,
+    "max_drawdown": 0.20,
+    "min_win_rate": 0.45,
+    "min_profit_factor": 1.4,
+    "min_total_return": 0.25
+  },
+  
+  "validation_rules": {
+    "min_data_points": 500,
+    "required_indicators": ["sma_fast", "sma_slow", "atr", "trend_strength"],
+    "parameter_constraints": {
+      "technical_parameters.fast_window < technical_parameters.slow_window": true,
+      "technical_parameters.atr_window > 0": true,
+      "technical_parameters.trend_alignment_threshold > 0": true,
+      "technical_parameters.trend_alignment_threshold < 1": true,
+      "risk_management.sl_atr_multiplier > 0": true,
+      "risk_management.tp_atr_multiplier > risk_management.sl_atr_multiplier": true
+    },
+    "data_quality_checks": {
+      "no_missing_values": true,
+      "no_duplicate_timestamps": true,
+      "positive_volume": true,
+      "valid_ohlc": true,
+      "multiple_timeframes": true
+    }
+  },
+  
+  "mtf_specific": {
+    "resample_method": "last",
+    "alignment_method": "forward_fill",
+    "handle_gaps": true,
+    "min_bars_per_timeframe": {
+      "1h": 100,
+      "4h": 50,
+      "1d": 30
+    }
+  },
+  
+  "metadata": {
+    "created_date": "2024-01-01",
+    "last_modified": "2024-01-01",
+    "tags": ["mtf", "multi_timeframe", "trend_following", "ma_crossover", "atr"],
+    "complexity": "high",
+    "market_types": ["crypto", "forex"],
+    "timeframes": ["1h", "4h", "1d"],
+    "notes": [
+      "Requires multiple timeframe data",
+      "Higher timeframes provide trend confirmation",
+      "Alignment score determines signal strength",
+      "Consider data alignment carefully"
+    ]
+  }
+} 

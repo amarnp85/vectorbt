@@ -10,6 +10,6 @@ from .cache_manager import cache_manager
 from .metadata_fetcher import data_fetcher
 
 __all__ = [
-    'cache_manager',
-    'data_fetcher',
-] 
+    "cache_manager",
+    "data_fetcher",
+]

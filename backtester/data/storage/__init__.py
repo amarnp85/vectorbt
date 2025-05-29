@@ -16,7 +16,4 @@ For information on the VBT-native approach, see README_VBT_NATIVE.md
 # VBT Data storage
 from .data_storage import data_storage, DataStorage
 
-__all__ = [
-    'data_storage',
-    'DataStorage'
-] 
+__all__ = ["data_storage", "DataStorage"]

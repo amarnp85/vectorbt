@@ -1,0 +1,77 @@
+{
+  "_comment": "Example configuration showing ATR-based position sizing",
+  
+  "strategy_name": "DMA ATR with Risk-Based Sizing",
+  "strategy_class": "DMAATRTrendStrategy",
+  "version": "1.0.0",
+  "description": "DMA ATR strategy using ATR-based position sizing for dynamic risk management",
+  
+  "technical_parameters": {
+    "short_ma_window": 20,
+    "long_ma_window": 50,
+    "atr_period": 14,
+    "adx_period": 14,
+    "adx_threshold": 25
+  },
+  
+  "risk_management": {
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 4.0,
+    "max_position_size": 1.0,
+    "risk_per_trade": 0.02,
+    "position_sizing": {
+      "_comment": "ATR-based position sizing adjusts position size based on volatility",
+      "method": "atr_based",
+      "base_size": 0.02,
+      "_base_size_comment": "For ATR sizing, base_size is the risk budget per trade (2% risk)",
+      "min_position_size": 0.01,
+      "max_position_size": 0.50,
+      "_max_comment": "Cap at 50% of equity to avoid oversizing in low volatility",
+      "atr_period": 14,
+      "atr_multiplier": 2.0,
+      "_atr_comment": "Risk = ATR * multiplier, Position size = Risk budget / Risk"
+    }
+  },
+  
+  "portfolio_parameters": {
+    "init_cash": 100000,
+    "fees": 0.001,
+    "slippage": 0.0005,
+    "freq": "1D"
+  },
+  
+  "optimization_ranges": {
+    "_comment": "Optimize both strategy and position sizing parameters",
+    "short_ma_window": [10, 20, 30],
+    "long_ma_window": [40, 50, 60],
+    "atr_period": [10, 14, 20],
+    "sl_atr_multiplier": [1.5, 2.0, 2.5],
+    "tp_atr_multiplier": [3.0, 4.0, 5.0],
+    "position_sizing.base_size": [0.01, 0.02, 0.03],
+    "position_sizing.atr_multiplier": [1.5, 2.0, 2.5, 3.0],
+    "position_sizing.max_position_size": [0.30, 0.50, 0.70]
+  },
+  
+  "notes": {
+    "position_sizing_explanation": [
+      "ATR-based position sizing dynamically adjusts position size based on market volatility.",
+      "When volatility (ATR) is high, position sizes are reduced to maintain consistent risk.",
+      "When volatility is low, position sizes can be increased up to the max limit.",
+      "",
+      "Example calculation:",
+      "- Current price: $100",
+      "- ATR(14): $2",
+      "- ATR multiplier: 2.0",
+      "- Risk per unit: $2 * 2.0 = $4",
+      "- Risk budget: 2% of $100,000 = $2,000",
+      "- Position size: $2,000 / $4 = 500 units",
+      "- Position value: 500 * $100 = $50,000 (50% of equity)"
+    ],
+    "benefits": [
+      "Consistent risk per trade regardless of market conditions",
+      "Automatic adjustment to changing volatility",
+      "Protection during high volatility periods",
+      "Larger positions during calm markets"
+    ]
+  }
+} 

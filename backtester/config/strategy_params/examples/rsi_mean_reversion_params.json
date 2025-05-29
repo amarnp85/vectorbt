@@ -1,0 +1,130 @@
+{
+  "strategy_name": "RSI Mean Reversion Strategy",
+  "strategy_class": "RSIMeanReversionStrategy",
+  "description": "Mean reversion strategy using RSI oversold/overbought levels with dynamic position sizing",
+  "version": "1.0.0",
+  "author": "Backtester System",
+  "category": "mean_reversion",
+  
+  "technical_parameters": {
+    "rsi_period": 14,
+    "oversold_threshold": 30,
+    "overbought_threshold": 70,
+    "confirmation_period": 2,
+    "volume_filter": true,
+    "min_volume_ratio": 1.5
+  },
+  
+  "risk_management": {
+    "stop_loss_type": "percentage",
+    "stop_loss_value": 0.03,
+    "take_profit_type": "percentage",
+    "take_profit_value": 0.06,
+    "max_position_size": 0.25,
+    "risk_per_trade": 0.01,
+    "max_drawdown_limit": 0.15
+  },
+  
+  "entry_conditions": {
+    "min_volume": 500000,
+    "trend_filter": false,
+    "volatility_filter": true,
+    "time_filter": false,
+    "custom_filters": {
+      "min_rsi_duration": 3,
+      "max_rsi_duration": 10
+    }
+  },
+  
+  "exit_conditions": {
+    "time_based_exit": true,
+    "max_hold_period": 20,
+    "trailing_stop": false,
+    "signal_reversal_exit": true,
+    "profit_target_exit": true
+  },
+  
+  "signal_processing": {
+    "clean_signals": true,
+    "min_signal_gap": 2,
+    "signal_confirmation_bars": 1,
+    "allow_pyramiding": false,
+    "max_pyramid_levels": 1
+  },
+  
+  "portfolio_parameters": {
+    "init_cash": 100000,
+    "fees": 0.001,
+    "slippage": 0.0005,
+    "freq": "1D",
+    "commission_type": "percentage",
+    "margin_requirement": 1.0
+  },
+  
+  "optimization_ranges": {
+    "rsi_period": [10, 14, 18, 21],
+    "oversold_threshold": [20, 25, 30, 35],
+    "overbought_threshold": [65, 70, 75, 80],
+    "stop_loss_value": [0.02, 0.03, 0.04, 0.05],
+    "take_profit_value": [0.04, 0.06, 0.08, 0.10],
+    "confirmation_period": [1, 2, 3]
+  },
+  
+  "data_parameters": {
+    "symbols": ["BTC/USDT", "ETH/USDT", "ADA/USDT"],
+    "timeframe": "4h",
+    "start_date": "2021-01-01",
+    "end_date": "2023-12-31",
+    "required_columns": ["open", "high", "low", "close", "volume"],
+    "min_data_points": 300,
+    "data_source": "exchange"
+  },
+  
+  "performance_targets": {
+    "min_sharpe_ratio": 0.8,
+    "max_drawdown": 0.15,
+    "min_win_rate": 0.55,
+    "min_profit_factor": 1.3,
+    "min_total_return": 0.15,
+    "max_var_95": 0.04
+  },
+  
+  "validation_rules": {
+    "min_data_points": 300,
+    "required_indicators": ["rsi"],
+    "parameter_constraints": {
+      "technical_parameters.rsi_period > 0": true,
+      "technical_parameters.oversold_threshold < 50": true,
+      "technical_parameters.overbought_threshold > 50": true,
+      "technical_parameters.oversold_threshold < technical_parameters.overbought_threshold": true,
+      "risk_management.stop_loss_value > 0": true,
+      "risk_management.take_profit_value > risk_management.stop_loss_value": true,
+      "risk_management.max_position_size <= 1.0": true,
+      "technical_parameters.confirmation_period >= 0": true
+    },
+    "data_quality_checks": {
+      "no_missing_values": true,
+      "no_duplicate_timestamps": true,
+      "positive_volume": true,
+      "valid_ohlc": true
+    }
+  },
+  
+  "strategy_specific": {
+    "rsi_smoothing": false,
+    "divergence_detection": false,
+    "multi_timeframe": false,
+    "adaptive_thresholds": false
+  },
+  
+  "metadata": {
+    "created_date": "2024-01-01",
+    "last_modified": "2024-01-01",
+    "tags": ["rsi", "mean_reversion", "oversold", "overbought"],
+    "complexity": "medium",
+    "market_types": ["crypto", "stocks"],
+    "timeframes": ["1h", "4h", "1D"],
+    "documentation_url": "https://docs.example.com/strategies/rsi-mean-reversion",
+    "research_paper": "https://papers.example.com/rsi-mean-reversion"
+  }
+} 

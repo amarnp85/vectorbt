@@ -1,0 +1,154 @@
+{
+  "_comment": "Generic Strategy Configuration Template - Copy and customize for new strategies",
+  "_template_version": "1.0.0",
+  "_usage": "Replace all placeholder values with strategy-specific parameters",
+  
+  "strategy_name": "Strategy Display Name",
+  "strategy_class": "StrategyClassName",
+  "description": "Brief description of what this strategy does and its key components",
+  "version": "1.0.0",
+  "author": "Strategy Author",
+  "category": "trend_following|mean_reversion|momentum|arbitrage|volatility|custom",
+  
+  "technical_parameters": {
+    "_comment": "Strategy-specific technical analysis parameters",
+    "example_period": 20,
+    "example_threshold": 0.5,
+    "example_multiplier": 2.0,
+    "example_type": "SMA|EMA|WMA",
+    "example_boolean": true
+  },
+  
+  "risk_management": {
+    "_comment": "Risk management and position sizing parameters",
+    "stop_loss_type": "fixed|atr|percentage",
+    "stop_loss_value": 0.02,
+    "take_profit_type": "fixed|atr|percentage|none",
+    "take_profit_value": 0.04,
+    "max_position_size": 1.0,
+    "risk_per_trade": 0.02,
+    "max_drawdown_limit": 0.20
+  },
+  
+  "entry_conditions": {
+    "_comment": "Conditions that must be met for trade entry",
+    "min_volume": 1000000,
+    "trend_filter": true,
+    "volatility_filter": false,
+    "time_filter": false,
+    "custom_filters": {}
+  },
+  
+  "exit_conditions": {
+    "_comment": "Conditions for trade exit beyond stop/take profit",
+    "time_based_exit": false,
+    "max_hold_period": 30,
+    "trailing_stop": false,
+    "signal_reversal_exit": true
+  },
+  
+  "signal_processing": {
+    "_comment": "Signal generation and processing parameters",
+    "clean_signals": true,
+    "min_signal_gap": 1,
+    "signal_confirmation_bars": 0,
+    "allow_pyramiding": false,
+    "max_pyramid_levels": 1
+  },
+  
+  "portfolio_parameters": {
+    "_comment": "Portfolio simulation parameters",
+    "init_cash": 100000,
+    "fees": 0.001,
+    "slippage": 0.0005,
+    "freq": "1D",
+    "commission_type": "percentage|fixed",
+    "margin_requirement": 1.0
+  },
+  
+  "optimization_ranges": {
+    "example_period": [10, 15, 20, 25, 30],
+    "example_threshold": [0.3, 0.5, 0.7, 1.0],
+    "example_multiplier": [1.5, 2.0, 2.5, 3.0],
+    "stop_loss_value": [0.01, 0.02, 0.03, 0.04],
+    "take_profit_value": [0.02, 0.04, 0.06, 0.08]
+  },
+  
+  "portfolio_optimization": {
+    "_comment": "Multi-symbol portfolio optimization settings - uncomment and customize as needed",
+    "_optimization_level": "strategy_only|weights_only|hierarchical|simultaneous",
+    "_weight_optimization_method": "equal_weight|inverse_volatility|risk_parity|mean_variance|minimum_variance|maximum_sharpe|riskfolio_hrp|riskfolio_herc",
+    "_rebalance_freq": "D|W|M|Q|Y",
+    "_lookback_period": "1M|3M|6M|1Y",
+    "_min_weight": 0.0,
+    "_max_weight": 0.5,
+    "_max_portfolio_volatility": 0.15,
+    "_target_return": 0.12,
+    "_transaction_cost": 0.001,
+    "_rebalance_threshold": 0.05,
+    "_use_regime_detection": false,
+    "_risk_aversion": 1.0,
+    "_utility_function": "mean_variance|cvar|max_drawdown"
+  },
+  
+  "data_parameters": {
+    "_comment": "Data requirements and specifications",
+    "symbols": ["BTC/USDT", "ETH/USDT"],
+    "timeframe": "1D",
+    "start_date": "2020-01-01",
+    "end_date": "2023-12-31",
+    "required_columns": ["open", "high", "low", "close", "volume"],
+    "min_data_points": 500,
+    "data_source": "exchange|csv|database"
+  },
+  
+  "performance_targets": {
+    "_comment": "Minimum performance thresholds for strategy validation",
+    "min_sharpe_ratio": 1.0,
+    "max_drawdown": 0.20,
+    "min_win_rate": 0.40,
+    "min_profit_factor": 1.2,
+    "min_total_return": 0.10,
+    "max_var_95": 0.05
+  },
+  
+  "validation_rules": {
+    "_comment": "Rules for parameter and data validation",
+    "min_data_points": 500,
+    "required_indicators": ["example_indicator1", "example_indicator2"],
+    "parameter_constraints": {
+      "technical_parameters.example_period > 0": true,
+      "technical_parameters.example_threshold >= 0": true,
+      "risk_management.stop_loss_value > 0": true,
+      "risk_management.take_profit_value > risk_management.stop_loss_value": true,
+      "risk_management.max_position_size <= 1.0": true
+    },
+    "data_quality_checks": {
+      "no_missing_values": true,
+      "no_duplicate_timestamps": true,
+      "positive_volume": true,
+      "valid_ohlc": true
+    }
+  },
+  
+  "strategy_specific": {
+    "_comment": "Add any strategy-specific parameters that don't fit other categories",
+    "custom_parameter1": "value1",
+    "custom_parameter2": 42,
+    "custom_settings": {
+      "nested_param": true
+    }
+  },
+  
+  "metadata": {
+    "_comment": "Additional metadata for strategy management",
+    "created_date": "2024-01-01",
+    "last_modified": "2024-01-01",
+    "tags": ["example", "template"],
+    "complexity": "low|medium|high",
+    "market_types": ["crypto", "forex", "stocks", "commodities"],
+    "timeframes": ["1m", "5m", "15m", "1h", "4h", "1D"],
+    "documentation_url": "https://docs.example.com/strategies/example",
+    "research_paper": "https://papers.example.com/strategy-research"
+  }
+} 

@@ -13,4 +13,4 @@ Key Features:
 
 from .data_healthcheck import StreamlinedHealthChecker
 
-__all__ = ['StreamlinedHealthChecker'] 
+__all__ = ["StreamlinedHealthChecker"]

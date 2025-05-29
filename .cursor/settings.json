@@ -1,0 +1,25 @@
+{
+  // Cursor-specific settings to prevent Jupyter extension conflicts
+  "jupyter.enabled": false,
+  "jupyter.disableJupyterAutoStart": true,
+  "jupyter.askForKernelRestart": false,
+  "jupyter.interactiveWindow.creationMode": "perFile",
+  
+  // Disable automatic extension loading
+  "extensions.autoCheckUpdates": false,
+  "extensions.autoUpdate": false,
+  
+  // Python-specific settings
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.terminal.activateEnvironment": false,
+  "python.analysis.typeCheckingMode": "basic",
+  
+  // File associations
+  "files.associations": {
+    "*.py": "python"
+  },
+  
+  // Disable features that might trigger extension loading
+  "workbench.enableExperiments": false,
+  "telemetry.telemetryLevel": "off"
+} 

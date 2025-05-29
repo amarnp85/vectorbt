@@ -11,13 +11,13 @@ from .vbt_data_handler import VBTDataHandler
 from .fetch_logger import FetchLogger
 
 __all__ = [
-    'DataFetcher',
-    'CacheHandler', 
-    'SymbolResolver',
-    'FreshnessChecker',
-    'DataResampler',
-    'ExchangeFetcher',
-    'DataMerger',
-    'VBTDataHandler',
-    'FetchLogger'
-] 
+    "DataFetcher",
+    "CacheHandler",
+    "SymbolResolver",
+    "FreshnessChecker",
+    "DataResampler",
+    "ExchangeFetcher",
+    "DataMerger",
+    "VBTDataHandler",
+    "FetchLogger",
+]

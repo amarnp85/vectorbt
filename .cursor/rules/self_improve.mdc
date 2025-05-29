@@ -1,72 +1,178 @@
 ---
 description: Guidelines for continuously improving Cursor rules based on emerging code patterns and best practices.
-globs: **/*
-alwaysApply: true
+globs: 
+alwaysApply: false
 ---
+# Self-Improvement Guidelines
 
-- **Rule Improvement Triggers:**
-  - New code patterns not covered by existing rules
-  - Repeated similar implementations across files
-  - Common error patterns that could be prevented
-  - New libraries or tools being used consistently
-  - Emerging best practices in the codebase
+## Rule Improvement Triggers
 
-- **Analysis Process:**
-  - Compare new code with existing rules
-  - Identify patterns that should be standardized
-  - Look for references to external documentation
-  - Check for consistent error handling patterns
-  - Monitor test patterns and coverage
+### Code Pattern Recognition
+- **New VBT Usage Patterns**: When discovering new VectorBT Pro methods or features
+- **Repeated Implementations**: Same logic appearing in 3+ places
+- **Performance Optimizations**: Better ways to use VBT's vectorized operations
+- **Common Errors**: Patterns that frequently cause bugs or performance issues
 
-- **Rule Updates:**
-  - **Add New Rules When:**
-    - A new technology/pattern is used in 3+ files
-    - Common bugs could be prevented by a rule
-    - Code reviews repeatedly mention the same feedback
-    - New security or performance patterns emerge
+### Framework Evolution
+- **New Strategies Added**: Update patterns when new strategy types emerge
+- **VBT Version Updates**: Incorporate new VectorBT Pro features
+- **Architecture Changes**: When module responsibilities shift
+- **Integration Patterns**: New ways of combining VBT components
 
-  - **Modify Existing Rules When:**
-    - Better examples exist in the codebase
-    - Additional edge cases are discovered
-    - Related rules have been updated
-    - Implementation details have changed
+## Analysis Process
 
-- **Example Pattern Recognition:**
-  ```typescript
-  // If you see repeated patterns like:
-  const data = await prisma.user.findMany({
-    select: { id: true, email: true },
-    where: { status: 'ACTIVE' }
-  });
-  
-  // Consider adding to [prisma.mdc](mdc:.cursor/rules/prisma.mdc):
-  // - Standard select fields
-  // - Common where conditions
-  // - Performance optimization patterns
-  ```
+### 1. Code Review
+```python
+# Look for patterns like:
+# ✅ GOOD: Discovered efficient VBT usage
+portfolio = vbt.Portfolio.from_signals(
+    data.close,
+    entries=entries,
+    exits=exits,
+    sl_stop=0.02,  # New feature discovered
+    tp_stop=0.05
+)
 
-- **Rule Quality Checks:**
-  - Rules should be actionable and specific
-  - Examples should come from actual code
-  - References should be up to date
-  - Patterns should be consistently enforced
+# ❌ BAD: Custom implementation of VBT feature
+# If you see custom code that VBT can handle, document it
+```
 
-- **Continuous Improvement:**
-  - Monitor code review comments
-  - Track common development questions
-  - Update rules after major refactors
-  - Add links to relevant documentation
-  - Cross-reference related rules
+### 2. Documentation Review
+- Check `vectorbtpro_docs/` for new features
+- Compare current usage with VBT best practices
+- Identify gaps in current rules
 
-- **Rule Deprecation:**
-  - Mark outdated patterns as deprecated
-  - Remove rules that no longer apply
-  - Update references to deprecated rules
-  - Document migration paths for old patterns
+### 3. Performance Analysis
+- Monitor strategy execution times
+- Identify bottlenecks in data processing
+- Find opportunities for VBT optimization
 
-- **Documentation Updates:**
-  - Keep examples synchronized with code
-  - Update references to external docs
-  - Maintain links between related rules
-  - Document breaking changes
-Follow [cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc) for proper rule formatting and structure.
+## Rule Update Guidelines
+
+### When to Add New Rules
+1. **New VBT Feature Usage**: Document with examples
+   ```markdown
+   ### Dynamic Position Sizing
+   # ✅ DO: Use VBT's size_type parameter
+   portfolio = vbt.Portfolio.from_signals(
+       size=signal_strength,  # Dynamic sizing
+       size_type='amount'
+   )
+   ```
+
+2. **Common Mistakes**: Add anti-patterns
+   ```markdown
+   # ❌ DON'T: Loop through price data
+   for i in range(len(prices)):  # Avoid
+   
+   # ✅ DO: Use vectorized operations
+   signals = prices > threshold
+   ```
+
+3. **Architecture Patterns**: Document design decisions
+   ```markdown
+   ### Strategy Composition
+   - Strategies handle indicators and signals only
+   - Portfolio management stays in portfolio module
+   - Analysis uses VBT's built-in metrics
+   ```
+
+### When to Update Existing Rules
+1. **Better Examples Found**: Replace with clearer code from the codebase
+2. **VBT Updates**: New methods supersede old approaches
+3. **Simplification**: Found more concise way to achieve same result
+4. **Deprecation**: VBT features become obsolete
+
+## Continuous Improvement Workflow
+
+### 1. Pattern Detection
+```python
+# During development, note patterns like:
+# "I keep using this VBT feature combination"
+# "This approach is much faster than what we documented"
+# "VBT has a method for this that we're not using"
+```
+
+### 2. Rule Documentation
+```markdown
+# Add to backtester_core.mdc:
+### New Pattern Name
+# ✅ DO: Show the efficient approach
+code_example_from_actual_usage
+
+# ❌ DON'T: Show what to avoid
+anti_pattern_example
+
+# Note: Reference specific VBT documentation section
+```
+
+### 3. Example Updates
+- Update `examples/` with new patterns
+- Ensure examples follow latest rules
+- Remove outdated approaches
+
+## Quality Metrics
+
+### Rule Effectiveness
+- **Clarity**: Can developers understand immediately?
+- **Actionability**: Does it show exactly what to do?
+- **Relevance**: Is it used frequently in the codebase?
+- **Accuracy**: Does it reflect current VBT best practices?
+
+### Framework Health
+- **Code Duplication**: Decreasing over time?
+- **Performance**: Strategies running faster?
+- **Maintainability**: Easier to add new features?
+- **VBT Utilization**: Using more built-in features?
+
+## Documentation Standards
+
+### Rule Format
+```markdown
+### Feature/Pattern Name
+Brief description of when to use
+
+# ✅ DO: Correct approach
+actual_code_example
+
+# ❌ DON'T: What to avoid
+anti_pattern
+
+# Note: Additional context or VBT reference
+```
+
+### Example Requirements
+- Must be from actual working code
+- Include necessary imports
+- Show complete context
+- Reference VBT documentation
+
+## Review Checklist
+
+### Weekly Review
+- [ ] Check for repeated code patterns
+- [ ] Review new VBT features in docs
+- [ ] Identify performance improvements
+- [ ] Update examples if needed
+
+### Monthly Review
+- [ ] Analyze rule usage and effectiveness
+- [ ] Remove obsolete patterns
+- [ ] Consolidate similar rules
+- [ ] Update VBT version-specific features
+
+### Quarterly Review
+- [ ] Major rule reorganization if needed
+- [ ] Architecture pattern updates
+- [ ] Performance benchmark updates
+- [ ] Framework evolution assessment
+
+## Anti-Patterns to Watch For
+
+1. **Over-Engineering**: Creating complex wrappers around simple VBT calls
+2. **Reinventing VBT**: Implementing features that VBT already provides
+3. **Ignoring VBT Updates**: Not adopting new VBT features
+4. **Rule Proliferation**: Too many micro-rules instead of principles
+5. **Outdated Examples**: Rules showing old VBT API usage
+
+Remember: **The goal is to maximize VBT Pro usage while minimizing custom code!**

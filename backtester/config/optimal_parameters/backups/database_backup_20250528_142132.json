@@ -1,0 +1,70 @@
+{
+  "DMAATRTrendStrategy_BTC_USDT_1h": {
+    "symbol": "BTC/USDT",
+    "timeframe": "1h",
+    "strategy": "DMAATRTrendStrategy",
+    "parameters": {
+      "fast_window": "10",
+      "slow_window": "70",
+      "atr_window": "10",
+      "atr_multiplier_sl": 1.5,
+      "atr_multiplier_tp": 3.0,
+      "symbol": "BTC/USDT"
+    },
+    "performance": {
+      "sharpe_ratio": 1.3117971806365856,
+      "total_return": 177.95845776779325,
+      "max_drawdown": -0.6026803928039454,
+      "win_rate": 0.3300353356890459,
+      "total_trades": 1415,
+      "profit_factor": 1.1122214387918212
+    },
+    "last_updated": "2025-05-28 08:55:04",
+    "optimization_count": 1
+  },
+  "DMAATRTrendStrategy_ETH_USDT_4h": {
+    "symbol": "ETH/USDT",
+    "timeframe": "4h",
+    "strategy": "DMAATRTrendStrategy",
+    "parameters": {
+      "fast_window": "30",
+      "slow_window": "70",
+      "atr_window": "10",
+      "atr_multiplier_sl": 1.5,
+      "atr_multiplier_tp": 3.0,
+      "symbol": "ETH/USDT"
+    },
+    "performance": {
+      "sharpe_ratio": 1.121491224172257,
+      "total_return": 86.79745055526992,
+      "max_drawdown": -0.6710201393339316,
+      "win_rate": 0.4075471698113208,
+      "total_trades": 265,
+      "profit_factor": 1.2897397876159407
+    },
+    "last_updated": "2025-05-28 08:55:04",
+    "optimization_count": 1
+  },
+  "DMAATRTrendStrategy_SOL_USDT_4h": {
+    "symbol": "SOL/USDT",
+    "timeframe": "4h",
+    "strategy": "DMAATRTrendStrategy",
+    "parameters": {
+      "fast_window": 10,
+      "slow_window": 70,
+      "atr_window": 10,
+      "atr_multiplier_sl": 1.5,
+      "atr_multiplier_tp": 3.0
+    },
+    "performance": {
+      "sharpe_ratio": 1.466235867624879,
+      "total_return": 136.03495190652967,
+      "max_drawdown": -0.7565882382705995,
+      "win_rate": 0.38190954773869346,
+      "total_trades": 199,
+      "profit_factor": 1.3843072241839045
+    },
+    "last_updated": "2025-05-28 09:13:09",
+    "optimization_count": 1
+  }
+}

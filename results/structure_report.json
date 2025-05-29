@@ -1,0 +1,60 @@
+{
+  "migration_date": "2025-05-28T19:09:03.391663",
+  "structure_type": "simplified_symbol_portfolio",
+  "categories": {
+    "symbols": {
+      "description": "Individual symbol analysis",
+      "subdirectories": [
+        {
+          "name": "ETH_USDT",
+          "file_count": 10
+        },
+        {
+          "name": "SOL_USDT",
+          "file_count": 13
+        },
+        {
+          "name": "BTC_USDT",
+          "file_count": 21
+        }
+      ],
+      "total_files": 44
+    },
+    "portfolios": {
+      "description": "Multi-symbol portfolio analysis",
+      "subdirectories": [
+        {
+          "name": "optimization",
+          "file_count": 0
+        },
+        {
+          "name": "defi_tokens",
+          "file_count": 0
+        },
+        {
+          "name": "crypto_majors",
+          "file_count": 0
+        }
+      ],
+      "total_files": 0
+    },
+    "general": {
+      "description": "General testing and comparisons",
+      "subdirectories": [
+        {
+          "name": "strategy_comparisons",
+          "file_count": 0
+        },
+        {
+          "name": "testing",
+          "file_count": 1
+        },
+        {
+          "name": "timeframe_analysis",
+          "file_count": 0
+        }
+      ],
+      "total_files": 1
+    }
+  }
+}
