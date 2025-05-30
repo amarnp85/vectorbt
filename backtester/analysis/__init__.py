@@ -21,7 +21,7 @@ Usage:
 """
 
 from .performance_analyzer import PerformanceAnalyzer
-from .trading_charts_refactored import TradingChartsEngine
+from .trading_charts import TradingChartsEngine
 from .vbt_compatibility import VBTCompatibilityLayer
 from .benchmark_analyzer import BenchmarkAnalyzer
 from .mtf_plotting import MTFPlottingEngine

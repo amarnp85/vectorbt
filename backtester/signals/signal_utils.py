@@ -24,11 +24,11 @@ Usage:
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, Tuple, List
-import logging
+from ..utilities.structured_logging import get_logger
 from dataclasses import dataclass
 from enum import Enum
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SignalType(Enum):

@@ -10,7 +10,7 @@ This directory contains comprehensive examples demonstrating how to test trading
 python strategy_tester.py --symbols BTC/USDT --timeframes 4h --optimize
 
 # Test multiple symbols and timeframes
-python strategy_tester.py --symbols BTC/USDT,ETH/USDT,SOL/USDT --timeframes 4h,1d --optimize
+python examples/strategy_tester.py --symbols BTC/USDT,ETH/USDT,SOL/USDT --timeframes 4h,1d --optimize
 
 # Quick test without plots
 python strategy_tester.py --symbols BTC/USDT --timeframes 4h --optimize --no-plots
@@ -144,7 +144,7 @@ BTC/USDT,4h,optimized,F10/S80/A10,10,80,10,43.22%,0.652,-8.67%,30.6%,330,2020-01
 ### **Single Symbol Analysis**
 ```bash
 # Optimize and test BTC on 4h timeframe
-python strategy_tester.py --symbols BTC/USDT --timeframes 4h --optimize
+python examples/strategy_tester.py --symbols BTC/USDT --timeframes 4h --optimize
 
 # Results will be in:
 # - results/symbols/BTC_USDT/plots/ (charts and analysis)

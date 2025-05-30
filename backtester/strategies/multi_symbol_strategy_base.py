@@ -85,6 +85,9 @@ class MultiSymbolStrategy(BaseStrategy):
         # Calculate per-symbol indicators using VBT's broadcasting
         symbol_indicators = self._calculate_all_symbol_indicators()
         
+        # Store basic indicators first so cross-symbol calculations can access them
+        self.indicators = symbol_indicators
+        
         # Calculate cross-symbol indicators
         cross_indicators = self._calculate_cross_symbol_indicators()
         
@@ -126,7 +129,7 @@ class MultiSymbolStrategy(BaseStrategy):
         indicators['atr'] = vbt.talib("ATR").run(high, low, close, timeperiod=14).real
         
         # Returns for all symbols
-        indicators['returns'] = close.pct_change()
+        indicators['returns'] = close.pct_change(fill_method=None)
         
         # Call strategy-specific indicator calculation
         custom_indicators = self._calculate_custom_indicators()
@@ -155,11 +158,8 @@ class MultiSymbolStrategy(BaseStrategy):
         
         indicators = {}
         
-        # Rolling correlation matrix using VBT
-        correlation_matrix = returns.vbt.rolling_corr(
-            window=self.correlation_lookback,
-            pairwise=True
-        )
+        # Rolling correlation matrix using pandas (VBT's rolling_corr doesn't support pairwise)
+        correlation_matrix = returns.rolling(self.correlation_lookback).corr()
         indicators['correlation_matrix'] = correlation_matrix
         
         # Average correlation for each symbol

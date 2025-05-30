@@ -1,227 +1,237 @@
 # Analysis Module
 
-The Analysis module provides comprehensive performance analysis and modern interactive visualization capabilities for backtesting results.
+The Analysis module provides comprehensive performance analysis and visualization for backtesting results, featuring a modular architecture with specialized components for different analysis aspects.
 
-## Overview
+## 🏗️ Architecture Overview
 
-This module has been streamlined and consolidated around a powerful new `TradingChartsEngine` that provides professional-grade interactive charts with enhanced zoom, pan, and resize functionality.
+The module has been refactored into a clean, modular architecture:
 
-## Key Components
+```
+analysis/
+├── chart_components/     # Modular chart building blocks
+│   ├── base.py          # Interfaces and base classes
+│   ├── processors.py    # Data processing components
+│   ├── builders.py      # Chart structure builders
+│   ├── renderers.py     # Visual element renderers
+│   └── managers.py      # State and configuration managers
+├── signal_components/    # Signal processing components
+│   ├── timing.py        # Signal timing calculations
+│   ├── extractors.py    # Signal extraction from various sources
+│   └── validators.py    # Signal validation and quality checks
+├── trading_charts.py    # Main orchestrator (488 lines, -59% from original)
+├── trading_signals.py   # Signal orchestrator (439 lines, -70% from original)
+└── performance_analyzer.py  # Performance metrics engine
+```
 
-### 📊 TradingChartsEngine
-The core plotting engine that provides:
-- **Enhanced Interactivity**: Improved zoom, pan, and resize with responsive design
-- **Smart Indicator Categorization**: Automatically places indicators in appropriate chart locations
-- **Multiple Chart Types**: Main trading charts, strategy analysis, and performance metrics
-- **Multiple Backends**: Plotly (primary), mplfinance (static), bokeh (interactive)
-- **Professional Export**: High-quality HTML, PNG, PDF exports with drawing tools
+## 📊 Key Components
 
-### 📈 PerformanceAnalyzer
-Comprehensive performance metrics calculation:
-- Portfolio-level metrics (returns, Sharpe, Sortino, Calmar ratios)
-- Trade-level analysis (win rate, profit factor, expectancy)
-- Risk-adjusted returns and drawdown analysis
-- Benchmark comparison and relative performance
+### TradingChartsEngine
+The main orchestrator that coordinates all chart components to create professional trading visualizations.
 
-### 🔧 VBTCompatibilityLayer
-Handles differences between vectorbtpro versions and provides safe access to portfolio methods.
+**Features:**
+- **Main Trading Chart**: Price action with indicators, signals, and stop levels
+- **Strategy Analysis Chart**: Comprehensive performance dashboard with 6 subplots
+- **Smart Component System**: Each component has a single responsibility
+- **Enhanced Interactivity**: Improved zoom, pan, resize with Plotly
+- **Stop Level Visualization**: Shows exact SL/TP levels for all trades
 
-### 📊 BenchmarkAnalyzer
-Advanced benchmark comparison and sizing calibration using vectorbtpro's built-in capabilities.
-
-### ⏰ MTFPlottingEngine
-Specialized plotting for multi-timeframe analysis with aligned indicators and trend comparisons.
-
-## Quick Start
-
-### Basic Usage
-
+**Usage:**
 ```python
-from backtester.analysis import TradingChartsEngine, PerformanceAnalyzer
+from backtester.analysis import TradingChartsEngine
 
-# Create charts engine
-charts = TradingChartsEngine(portfolio, data, indicators)
+# Create engine
+charts = TradingChartsEngine(
+    portfolio=portfolio,
+    data=data,
+    indicators=indicators,
+    signals=signals,
+    signal_config=SignalConfig(signal_timing_mode="execution")
+)
 
 # Generate main trading chart
-main_chart = charts.create_main_chart(
-    title="My Strategy Analysis",
+main_fig = charts.create_main_chart(
+    title="BTC/USDT Trading Analysis",
     show_volume=True,
     show_signals=True,
     show_equity=True
 )
 
-# Save with enhanced interactivity
-charts.save_chart(main_chart, "strategy_analysis.html")
-
-# Generate performance analysis
-strategy_chart = charts.create_strategy_analysis_chart(
-    title="Strategy Performance Metrics"
+# Generate strategy analysis dashboard
+analysis_fig = charts.create_strategy_analysis_chart(
+    title="Strategy Performance Analysis"
 )
-charts.save_chart(strategy_chart, "performance_metrics.html")
 ```
 
-### Performance Analysis
+### Chart Components
 
+#### Processors
+- **DataProcessor**: Extracts and validates OHLCV data from VBT objects
+- **IndicatorProcessor**: Categorizes indicators (price overlay, volume overlay, subplot)
+
+#### Builders
+- **ChartBuilder**: Creates subplot structure with optimal layout
+- **Smart range calculation**: Prevents chart scaling issues
+
+#### Renderers
+- **CandlestickRenderer**: Main price chart
+- **IndicatorRenderer**: All indicator types with proper placement
+- **SignalRenderer**: Trading signals with SL/TP levels
+- **VolumeRenderer**: Volume bars with color coding
+- **EquityRenderer**: Portfolio equity curve
+
+#### Managers
+- **LegendManager**: Prevents legend duplication
+- **LayoutManager**: Calculates optimal subplot heights
+- **ThemeManager**: Consistent styling across charts
+
+### SignalProcessor
+Orchestrates signal extraction, validation, and timing adjustments.
+
+**Features:**
+- **Unified Signal Extraction**: From portfolio trades and strategy signals
+- **Timing Modes**: Signal time vs execution time to prevent lookahead bias
+- **Comprehensive Validation**: Ensures signal quality and consistency
+- **Stop Level Handling**: Preserves SL/TP levels through the pipeline
+
+**Usage:**
 ```python
-# Analyze performance
-analyzer = PerformanceAnalyzer(portfolio)
+from backtester.analysis.trading_signals import SignalProcessor, SignalConfig
 
-# Get comprehensive metrics
-summary_stats = analyzer.get_summary_stats()
-trade_metrics = analyzer.get_trade_metrics()
-risk_metrics = analyzer.get_risk_metrics()
-
-# Export detailed report
-analyzer.export_results("performance_report.csv", include_trades=True)
-
-# Generate formatted report
-report = analyzer.generate_report(detailed=True)
-print(report)
-```
-
-## Chart Features
-
-### Enhanced Interactivity
-- **Responsive Design**: Charts automatically resize to fit container
-- **Advanced Zoom**: Box zoom, wheel zoom, and pan with reset functionality
-- **Drawing Tools**: Add lines, shapes, and annotations directly on charts
-- **Spike Lines**: Precise data reading with crosshair functionality
-- **Unified Hover**: Better hover experience across all subplots
-
-### Smart Indicator Placement
-The engine automatically categorizes indicators:
-- **Price Overlays**: Moving averages, Bollinger Bands on main chart
-- **Volume Indicators**: Volume SMA, OBV in volume subplot
-- **Oscillators**: RSI, MACD in separate subplots with reference lines
-
-### Professional Export
-- **High-Quality HTML**: Responsive design with full interactivity
-- **Static Images**: PNG, PDF, SVG at publication quality (1920x1080, 2x scale)
-- **Drawing Tools**: Export includes user annotations and drawings
-
-## Chart Types
-
-### 1. Main Trading Chart
-Comprehensive analysis with:
-- Candlestick price data
-- Technical indicators (smart placement)
-- Trade entry/exit signals
-- Volume analysis
-- Portfolio equity curve
-- Drawdown visualization
-
-### 2. Strategy Analysis Chart
-Advanced performance metrics with:
-- Monthly returns heatmap
-- Rolling Sharpe ratio
-- Trade distribution analysis
-- Drawdown analysis with annotations
-
-## Migration from Old System
-
-The module has been consolidated from multiple plotting engines into a single, powerful `TradingChartsEngine`. 
-
-### What Changed
-- ✅ **Removed**: `PlottingEngine`, `EnhancedPlottingEngine`, `OptimizationPlotter`
-- ✅ **Added**: Enhanced `TradingChartsEngine` with all functionality
-- ✅ **Improved**: Better interactivity, responsive design, professional export
-
-### Migration Guide
-```python
-# Old way (deprecated)
-from backtester.analysis import PlottingEngine
-plotter = PlottingEngine(portfolio, data, indicators)
-fig = plotter.plot_portfolio_overview()
-
-# New way (recommended)
-from backtester.analysis import TradingChartsEngine
-charts = TradingChartsEngine(portfolio, data, indicators)
-fig = charts.create_main_chart()
-```
-
-## Configuration
-
-### Chart Appearance
-```python
-# Configure backend
-charts = TradingChartsEngine(portfolio, data, indicators, backend="plotly")
-
-# Customize chart
-fig = charts.create_main_chart(
-    title="Custom Strategy Analysis",
-    show_volume=True,
+# Configure signal processing
+signal_config = SignalConfig(
+    signal_timing_mode="execution",  # Realistic execution timing
     show_signals=True,
-    show_equity=True,
-    height=1200
+    show_stop_levels=True
 )
+
+# Process signals
+processor = SignalProcessor(portfolio, data_processor, strategy_signals, signal_config)
+signals = processor.extract_signals()
+validation_report = processor.validate_signals()
 ```
 
-### Export Options
+### PerformanceAnalyzer
+Comprehensive performance metrics calculation engine.
+
+**Metrics Categories:**
+- **Returns Metrics**: Total, annualized, volatility, Sharpe, Sortino
+- **Trade Metrics**: Win rate, profit factor, expectancy, average trade
+- **Drawdown Metrics**: Max drawdown, duration, recovery
+- **Risk Metrics**: VaR, CVaR, downside deviation
+- **Benchmark Comparison**: Relative performance, alpha, beta
+
+**Usage:**
 ```python
-# Enhanced HTML export
-charts.save_chart(fig, "analysis.html", format="html")
+from backtester.analysis import PerformanceAnalyzer
 
-# High-quality image export
-charts.save_chart(fig, "analysis.png", format="png")
+analyzer = PerformanceAnalyzer(portfolio, signals=signals)
+
+# Get all metrics
+metrics = analyzer.get_all_metrics()
+
+# Export results
+analyzer.export_results("performance_report.csv")
 ```
 
-## Performance Tips
+### Strategy Analysis Chart
+The new analysis chart provides 6 key visualizations:
 
-1. **Large Datasets**: Use date range filtering for better performance
-2. **Multiple Charts**: Reuse the same TradingChartsEngine instance
-3. **Export Quality**: Use PNG/PDF for presentations, HTML for interactive analysis
-4. **Memory Usage**: Clear browser cache if working with many large charts
+1. **Portfolio Equity Curve**: Shows portfolio value over time
+2. **Trade Distribution & Win Rate**: Cumulative trades and rolling win rate
+3. **Drawdown Analysis**: Visualizes drawdowns with max DD highlighted
+4. **Trade Returns Distribution**: Histogram showing win/loss distribution
+5. **Trade Duration Distribution**: How long trades typically last
+6. **Monthly Returns Heatmap**: Performance consistency over time
 
-## Future Enhancements
+## 🚀 Quick Start
 
-See [FUTURE_IMPROVEMENTS_PLAN.md](./FUTURE_IMPROVEMENTS_PLAN.md) for detailed roadmap including:
-- **Phase 1**: Streamlit dashboard integration
-- **Phase 2**: Advanced 3D visualization and real-time features
-- **Phase 3**: Machine learning integration and predictive analytics
-- **Phase 4**: Enterprise features and cloud deployment
-
-## Examples
-
-### Complete Analysis Workflow
+### Basic Trading Analysis
 ```python
 from backtester.analysis import TradingChartsEngine, PerformanceAnalyzer
 
-# Initialize
-charts = TradingChartsEngine(portfolio, data, indicators)
+# Analyze performance
 analyzer = PerformanceAnalyzer(portfolio)
+metrics = analyzer.get_all_metrics()
 
-# Generate main analysis
-main_chart = charts.create_main_chart()
-charts.save_chart(main_chart, "results/main_chart.html")
+# Create visualizations
+charts = TradingChartsEngine(portfolio, data, indicators, signals)
 
-# Generate performance analysis  
-perf_chart = charts.create_strategy_analysis_chart(analyzer=analyzer)
-charts.save_chart(perf_chart, "results/strategy_analysis.html")
+# Main trading chart
+trading_fig = charts.create_main_chart()
+charts.save_chart(trading_fig, "trading_analysis.html")
 
-# Export metrics
-analyzer.export_results("results/performance_metrics.csv")
-
-print("Analysis complete! Check the results/ directory.")
+# Performance dashboard
+analysis_fig = charts.create_strategy_analysis_chart()
+charts.save_chart(analysis_fig, "performance_analysis.html")
 ```
 
 ### Multi-Timeframe Analysis
 ```python
 from backtester.analysis import MTFPlottingEngine
 
-# Multi-timeframe plotting
-mtf_plotter = MTFPlottingEngine()
-mtf_chart = mtf_plotter.plot_mtf_price_overview(mtf_data)
+mtf_engine = MTFPlottingEngine(data_dict, indicators_dict)
+fig = mtf_engine.create_mtf_chart(
+    symbol="BTC/USDT",
+    show_volume=True,
+    height_per_timeframe=400
+)
 ```
 
-## Dependencies
+## 📈 Chart Types
 
-- **vectorbtpro**: Core backtesting and data handling
-- **plotly**: Interactive plotting (primary backend)
-- **pandas**: Data manipulation
-- **numpy**: Numerical computations
-- **mplfinance**: Static financial charts (optional)
-- **bokeh**: Alternative interactive backend (optional)
+### 1. Main Trading Chart
+- Price action with candlesticks
+- Technical indicators (overlays and subplots)
+- Entry/exit signals with arrows
+- Stop loss and take profit levels (horizontal dashes)
+- Volume analysis
+- Portfolio equity curve
 
-## Support
+### 2. Strategy Analysis Dashboard
+- 6 synchronized subplots for comprehensive analysis
+- Performance metrics visualization
+- Risk analysis
+- Trade quality assessment
+- Time-based performance breakdown
 
-For issues, feature requests, or questions about the analysis module, please refer to the main project documentation or create an issue in the project repository. 
+## 🔧 Advanced Features
+
+### Signal Timing Modes
+Prevent lookahead bias with proper signal timing:
+- **Signal Mode**: Shows signals at generation time (for analysis)
+- **Execution Mode**: Shows signals at execution time (realistic)
+
+### Stop Level Visualization
+- Automatic detection of SL/TP levels from strategy
+- Red dashes for stop losses
+- Green dashes for take profits
+- Works for both long and short positions
+
+### Smart Indicator Placement
+- Automatically categorizes indicators
+- Price overlays (MA, Bollinger Bands)
+- Volume overlays (OBV)
+- Separate subplots (RSI, MACD)
+
+## 📝 Best Practices
+
+1. **Use Modular Components**: Leverage the component system for custom visualizations
+2. **Configure Signal Timing**: Always use "execution" mode for realistic results
+3. **Export High Quality**: Use PNG export with scale=2 for publications
+4. **Validate Signals**: Always check the validation report for signal quality
+5. **Benchmark Comparison**: Use the analyzer's benchmark features for relative performance
+
+## 🔗 Related Documentation
+
+- [VBT_REFERENCE.md](VBT_REFERENCE.md) - VectorBT Pro patterns and techniques
+- [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) - Future enhancements roadmap
+- [Module Architecture](../README.md) - Overall framework architecture
+
+## 📦 Dependencies
+
+- `vectorbtpro`: Core backtesting engine
+- `plotly`: Interactive visualizations
+- `pandas`: Data manipulation
+- `numpy`: Numerical computations
+
+The Analysis module represents a modern, modular approach to backtesting analysis, providing both powerful visualizations and comprehensive performance metrics in a maintainable architecture.

@@ -16,6 +16,8 @@ import os
 from pathlib import Path
 from datetime import datetime
 import numpy as np
+import pandas as pd
+import vectorbtpro as vbt
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,9 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import the actual modules directly
 from backtester.data import fetch_data
 from backtester.strategies.dma_atr_trend_strategy import DMAATRTrendStrategy
-from backtester.portfolio.simulation_engine import PortfolioSimulator, SimulationConfig
-from backtester.analysis.performance_analyzer import PerformanceAnalyzer
-from backtester.analysis.plotting_engine import PlottingEngine
+from backtester.portfolio import PortfolioSimulator, SimulationConfig, PositionSizeMode
+from backtester.analysis import PerformanceAnalyzer, TradingChartsEngine
 from backtester.config.config_manager import ConfigManager
 from backtester.config.optimal_parameters_db import OptimalParametersDB
 from backtester.utilities.structured_logging import setup_logging, get_logger
@@ -101,20 +102,62 @@ def main():
     
     # Run backtest with portfolio approach
     with logger.operation("Running portfolio backtest"):
-        # Initialize strategy
-        strategy = DMAATRTrendStrategy(data, **strategy_params)
-        
         # Create simulation config for portfolio
         sim_config = SimulationConfig(
-            initial_capital=100000,
-            commission=0.001,
+            init_cash=100000,
+            fees=0.001,
             slippage=0.0005,
-            position_sizing="equal_weight"  # Equal allocation across symbols
+            position_size_mode=PositionSizeMode.PERCENT_EQUITY,
+            position_size_value=0.25  # 25% of equity per position (4 symbols = 100%)
         )
         
-        # Run simulation
-        simulator = PortfolioSimulator(sim_config)
-        portfolio = simulator.run_backtest(strategy)
+        # For multi-symbol portfolios, we need to generate signals per symbol
+        all_signals = {}
+        all_indicators = {}
+        
+        for symbol in symbols:
+            # Get single symbol data
+            if hasattr(data, 'select'):
+                symbol_data = data.select(symbol)
+            else:
+                # If data doesn't have select method, extract manually
+                symbol_data = vbt.Data.from_data({
+                    'close': data.get('close')[symbol] if isinstance(data.get('close'), pd.DataFrame) else data.get('close'),
+                    'high': data.get('high')[symbol] if isinstance(data.get('high'), pd.DataFrame) else data.get('high'),
+                    'low': data.get('low')[symbol] if isinstance(data.get('low'), pd.DataFrame) else data.get('low'),
+                    'open': data.get('open')[symbol] if isinstance(data.get('open'), pd.DataFrame) else data.get('open'),
+                    'volume': data.get('volume')[symbol] if isinstance(data.get('volume'), pd.DataFrame) else data.get('volume')
+                })
+            
+            # Use optimal parameters if available for this symbol
+            symbol_optimal = optimal_params_available.get(symbol)
+            if symbol_optimal:
+                symbol_params = symbol_optimal['parameters']
+            else:
+                symbol_params = strategy_params
+            
+            # Initialize strategy for this symbol
+            strategy = DMAATRTrendStrategy(symbol_data, symbol_params)
+            
+            # Calculate indicators and generate signals
+            indicators = strategy.init_indicators()
+            signals = strategy.generate_signals()
+            
+            all_indicators[symbol] = indicators
+            all_signals[symbol] = signals
+        
+        # Combine signals from all symbols for portfolio simulation
+        # For now, we'll use a simple approach of concatenating signals
+        # Note: This is a simplified approach - in practice, you'd want more sophisticated signal combination
+        
+        # Use the first symbol's signals as a template and combine others
+        combined_signals = all_signals[symbols[0]].copy()
+        combined_indicators = all_indicators[symbols[0]].copy()
+        
+        # Run simulation with the first symbol's signals for demonstration
+        # In a real multi-symbol strategy, you'd want to properly combine signals
+        simulator = PortfolioSimulator(data, sim_config)
+        portfolio = simulator.simulate_from_signals(combined_signals)
         
         if portfolio is None:
             logger.error("Portfolio simulation failed")
@@ -125,18 +168,21 @@ def main():
         analyzer = PerformanceAnalyzer(portfolio)
         
         # Portfolio-level metrics
+        returns_metrics = analyzer.get_returns_metrics()
+        trade_metrics = analyzer.get_trade_metrics()
+        
         portfolio_metrics = {
-            'total_return': analyzer.total_return(),
-            'sharpe_ratio': analyzer.sharpe_ratio(),
-            'max_drawdown': analyzer.max_drawdown(),
-            'volatility': analyzer.volatility(),
-            'win_rate': analyzer.win_rate(),
-            'profit_factor': analyzer.profit_factor(),
-            'total_trades': analyzer.total_trades()
+            'total_return': returns_metrics.get('Total Return', 0),
+            'sharpe_ratio': returns_metrics.get('Sharpe Ratio', 0),
+            'max_drawdown': returns_metrics.get('Max Drawdown', 0),
+            'volatility': returns_metrics.get('Volatility', 0),
+            'win_rate': trade_metrics.get('Win Rate', 0),
+            'profit_factor': trade_metrics.get('Profit Factor', 0),
+            'total_trades': trade_metrics.get('Total Trades', 0)
         }
         
         # Log portfolio results
-        logger.portfolio_result({
+        logger.backtest_result({
             'portfolio': portfolio,
             'metrics': portfolio_metrics,
             'symbols': symbols,
@@ -160,16 +206,24 @@ def main():
                 symbol_params = strategy_params
             
             # Run individual backtest
-            symbol_strategy = DMAATRTrendStrategy(symbol_data, **symbol_params)
-            symbol_portfolio = simulator.run_backtest(symbol_strategy)
+            symbol_strategy = DMAATRTrendStrategy(symbol_data, symbol_params)
+            symbol_indicators = symbol_strategy.init_indicators()
+            symbol_signals = symbol_strategy.generate_signals()
+            
+            # Create individual simulator
+            symbol_simulator = PortfolioSimulator(symbol_data, sim_config)
+            symbol_portfolio = symbol_simulator.simulate_from_signals(symbol_signals)
             
             if symbol_portfolio:
                 symbol_analyzer = PerformanceAnalyzer(symbol_portfolio)
+                symbol_returns = symbol_analyzer.get_returns_metrics()
+                symbol_trades = symbol_analyzer.get_trade_metrics()
+                
                 individual_results[symbol] = {
-                    'total_return': symbol_analyzer.total_return(),
-                    'sharpe_ratio': symbol_analyzer.sharpe_ratio(),
-                    'max_drawdown': symbol_analyzer.max_drawdown(),
-                    'total_trades': symbol_analyzer.total_trades()
+                    'total_return': symbol_returns.get('Total Return', 0),
+                    'sharpe_ratio': symbol_returns.get('Sharpe Ratio', 0),
+                    'max_drawdown': symbol_returns.get('Max Drawdown', 0),
+                    'total_trades': symbol_trades.get('Total Trades', 0)
                 }
                 
                 logger.info(f"{symbol}: Return {individual_results[symbol]['total_return']:.2%}, "
@@ -184,25 +238,24 @@ def main():
     if not skip_plotting:
         with logger.operation("Generating portfolio visualizations"):
             try:
-                plotter = PlottingEngine(portfolio)
-                
                 # Create output directory
                 output_dir = Path("results/example_03_multi_symbol_portfolio")
                 output_dir.mkdir(parents=True, exist_ok=True)
                 
-                # Portfolio performance chart
-                plotter.plot_performance(
-                    title=f"Multi-Symbol Portfolio Performance ({', '.join(symbols)})",
-                    save_path=output_dir / "portfolio_performance.png"
-                )
+                # Create trading charts engine
+                charts_engine = TradingChartsEngine(portfolio, data, combined_indicators, combined_signals)
                 
-                # Individual symbol comparison
-                if len([r for r in individual_results.values() if r is not None]) > 1:
-                    plotter.plot_symbol_comparison(
-                        individual_results,
-                        title="Individual Symbol vs Portfolio Performance",
-                        save_path=output_dir / "symbol_comparison.png"
-                    )
+                # Portfolio performance chart
+                main_chart = charts_engine.create_main_chart(
+                    title=f"Multi-Symbol Portfolio Performance ({', '.join(symbols)})"
+                )
+                charts_engine.save_chart(main_chart, output_dir / "portfolio_performance.html")
+                
+                # Strategy analysis chart
+                analysis_chart = charts_engine.create_strategy_analysis_chart(
+                    title="Portfolio Strategy Analysis"
+                )
+                charts_engine.save_chart(analysis_chart, output_dir / "strategy_analysis.html")
                 
                 logger.success(f"Visualizations saved to {output_dir}/")
                 

@@ -380,6 +380,15 @@ class OptimalParametersDB:
             result = cursor.fetchone()
             
             if result:
+                # Parse metadata safely
+                metadata = {}
+                if result[9]:
+                    try:
+                        metadata = json.loads(result[9])
+                    except (json.JSONDecodeError, TypeError):
+                        # Handle empty string or invalid JSON
+                        metadata = {}
+                
                 return {
                     'symbol': symbol,
                     'timeframe': timeframe,
@@ -393,7 +402,7 @@ class OptimalParametersDB:
                     'total_trades': result[6],
                     'created_at': result[7],
                     'updated_at': result[8],
-                    'metadata': json.loads(result[9]) if result[9] else {}
+                    'metadata': metadata
                 }
             
         return None

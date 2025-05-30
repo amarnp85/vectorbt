@@ -47,6 +47,9 @@ from .pairs_trading_strategy import PairsTradingStrategy
 # Multi-timeframe strategies
 from .mtf_dma_atr_strategy import MTF_DMA_ATR_Strategy
 
+# Multi-symbol strategies
+from .multi_symbol_dma_atr_strategy import MultiSymbolDMAATRStrategy
+
 # Example strategies
 from .simple_ma_crossover_example import SimpleMAStrategy
 
@@ -64,6 +67,9 @@ __all__ = [
     
     # Multi-timeframe strategies
     'MTF_DMA_ATR_Strategy',
+    
+    # Multi-symbol strategies
+    'MultiSymbolDMAATRStrategy',
     
     # Examples
     'SimpleMAStrategy'

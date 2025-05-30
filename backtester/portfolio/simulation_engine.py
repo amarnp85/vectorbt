@@ -674,7 +674,7 @@ class MultiAssetPortfolioSimulator(BasePortfolioSimulator):
 
         # Prepare portfolio parameters
         portfolio_params = {
-            "data": self.data,
+            "close": self.data.close,  # VBT Portfolio.from_signals expects close, not data
             "entries": signals["long_entries"],
             "exits": signals["long_exits"],
             "short_entries": signals["short_entries"],

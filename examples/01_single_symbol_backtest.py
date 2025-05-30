@@ -24,7 +24,7 @@ from backtester.data import fetch_data
 from backtester.strategies.dma_atr_trend_strategy import DMAATRTrendStrategy
 from backtester.portfolio.simulation_engine import PortfolioSimulator, SimulationConfig, PositionSizeMode
 from backtester.analysis.performance_analyzer import PerformanceAnalyzer
-from backtester.analysis.trading_charts_refactored import TradingChartsEngine
+from backtester.analysis.trading_charts import TradingChartsEngine
 from backtester.analysis.trading_signals import SignalConfig
 from backtester.config.config_manager import ConfigManager
 from backtester.config.optimal_parameters_db import OptimalParametersDB
@@ -187,9 +187,9 @@ def main():
              show_signals=True,
              show_equity=True
          )),
-        ("simple_chart.html", "Simple Candlestick Chart", 
-         lambda: trading_charts.create_simple_candlestick(
-             title=f"{symbol} {timeframe} - Price Chart"
+        ("strategy_analysis.html", "Strategy Performance Analysis", 
+         lambda: trading_charts.create_strategy_analysis_chart(
+             title=f"{symbol} {timeframe} - Strategy Performance Analysis"
          )),
     ]
     

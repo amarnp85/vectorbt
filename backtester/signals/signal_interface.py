@@ -138,6 +138,22 @@ class SignalFormat:
             'sl_levels_count': (~self.sl_levels.isna()).sum() if hasattr(self.sl_levels, 'isna') else 0,
             'tp_levels_count': (~self.tp_levels.isna()).sum() if hasattr(self.tp_levels, 'isna') else 0
         }
+    
+    def copy(self) -> 'SignalFormat':
+        """Create a deep copy of the SignalFormat."""
+        return SignalFormat(
+            long_entries=self.long_entries.copy() if hasattr(self.long_entries, 'copy') else self.long_entries,
+            short_entries=self.short_entries.copy() if hasattr(self.short_entries, 'copy') else self.short_entries,
+            long_exits=self.long_exits.copy() if hasattr(self.long_exits, 'copy') else self.long_exits,
+            short_exits=self.short_exits.copy() if hasattr(self.short_exits, 'copy') else self.short_exits,
+            entry_prices=self.entry_prices.copy() if hasattr(self.entry_prices, 'copy') else self.entry_prices,
+            exit_prices=self.exit_prices.copy() if hasattr(self.exit_prices, 'copy') else self.exit_prices,
+            sl_levels=self.sl_levels.copy() if hasattr(self.sl_levels, 'copy') else self.sl_levels,
+            tp_levels=self.tp_levels.copy() if hasattr(self.tp_levels, 'copy') else self.tp_levels,
+            sl_price_levels=self.sl_price_levels.copy() if hasattr(self.sl_price_levels, 'copy') else self.sl_price_levels,
+            tp_price_levels=self.tp_price_levels.copy() if hasattr(self.tp_price_levels, 'copy') else self.tp_price_levels,
+            index=self.index.copy() if hasattr(self.index, 'copy') else self.index
+        )
 
 
 @dataclass

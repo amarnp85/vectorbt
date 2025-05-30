@@ -130,18 +130,27 @@ class StructuredLogger:
     
     def info(self, message: str, **kwargs):
         """Log an info message."""
+        import os
+        if os.environ.get('QUIET_MODE') == '1':
+            return
         if self.level != "ERROR":
             self.console.print(f"ℹ️  {message}", style="blue")
         logger.info(message)
     
     def success(self, message: str, **kwargs):
         """Log a success message."""
+        import os
+        if os.environ.get('QUIET_MODE') == '1':
+            return
         if self.level != "ERROR":
             self.console.print(f"✅ {message}", style="green")
         logger.success(message)
     
     def warning(self, message: str, **kwargs):
         """Log a warning message."""
+        import os
+        if os.environ.get('QUIET_MODE') == '1':
+            return
         if self.level != "ERROR":
             self.console.print(f"⚠️  {message}", style="yellow")
         logger.warning(message)
@@ -153,6 +162,9 @@ class StructuredLogger:
     
     def debug(self, message: str, **kwargs):
         """Log a debug message (only in debug mode)."""
+        import os
+        if os.environ.get('QUIET_MODE') == '1':
+            return
         if self.level == "DEBUG":
             self.console.print(f"🔍 {message}", style="dim")
         logger.debug(message)
@@ -241,10 +253,18 @@ class StructuredLogger:
         """Context manager for suppressing verbose output during optimization loops."""
         original_level = self.level
         self.level = "ERROR"
+        
+        # Also disable console output temporarily
+        original_console = self.console
+        from rich.console import Console
+        from io import StringIO
+        self.console = Console(file=StringIO(), quiet=True)
+        
         try:
             yield
         finally:
             self.level = original_level
+            self.console = original_console
 
 
 class BacktestLogger(StructuredLogger):
@@ -483,9 +503,28 @@ def log_error(message: str):
 @contextmanager
 def quiet_logging():
     """Context manager for temporarily suppressing verbose logging."""
-    original_level = get_logger().level
-    get_logger().level = "ERROR"
+    global _global_logger
+    
+    # Get all active loggers
+    main_logger = get_logger()
+    
+    # Store original states
+    original_level = main_logger.level
+    original_console = main_logger.console
+    
+    # Set to quiet mode
+    main_logger.level = "ERROR"
+    from rich.console import Console
+    from io import StringIO
+    main_logger.console = Console(file=StringIO(), quiet=True)
+    
+    # Also disable loguru
+    logger.disable("backtester")
+    
     try:
         yield
     finally:
-        get_logger().level = original_level 
+        # Restore original states
+        main_logger.level = original_level
+        main_logger.console = original_console
+        logger.enable("backtester") 

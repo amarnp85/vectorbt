@@ -9,12 +9,12 @@ import pandas as pd
 import numpy as np
 import vectorbtpro as vbt
 from typing import Dict, Any, Optional
-import logging
 
 from .base_strategy import BaseStrategy
 from ..indicators.simple_indicators import sma, atr
+from ..utilities.structured_logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DMAATRTrendStrategy(BaseStrategy):
@@ -91,8 +91,8 @@ class DMAATRTrendStrategy(BaseStrategy):
         # Validate parameters
         self._validate_parameters()
         
-        # Only log initialization if not in quiet mode (ERROR level)
-        if logger.isEnabledFor(logging.INFO):
+        # Only log initialization if not in quiet mode
+        if logger.level != "ERROR":
             logger.info(f"Initialized {self.__class__.__name__} strategy")
     
     def _validate_parameters(self):
@@ -123,7 +123,7 @@ class DMAATRTrendStrategy(BaseStrategy):
             Dictionary of calculated indicators
         """
         # Only log if not in quiet mode
-        if logger.isEnabledFor(logging.INFO):
+        if logger.level != "ERROR":
             logger.info("Calculating DMA ATR indicators")
         
         # Extract price data using get() method
@@ -156,7 +156,7 @@ class DMAATRTrendStrategy(BaseStrategy):
         ) / self.indicators['slow_ma']
         
         # Only log if not in quiet mode
-        if logger.isEnabledFor(logging.INFO):
+        if logger.level != "ERROR":
             logger.info(f"Calculated {len(self.indicators)} indicators")
         return self.indicators
     
@@ -173,7 +173,7 @@ class DMAATRTrendStrategy(BaseStrategy):
             Dictionary with signal arrays
         """
         # Only log if not in quiet mode
-        if logger.isEnabledFor(logging.INFO):
+        if logger.level != "ERROR":
             logger.info("Generating DMA ATR signals")
         
         # Extract indicators
@@ -320,6 +320,18 @@ class DMAATRTrendStrategy(BaseStrategy):
             # Absolute price levels for charting
             tp_price_levels[short_entries] = entry_prices - (atr_at_entries * self.params['atr_multiplier_tp'])
         
+        # Calculate entry and exit prices for signal validation
+        entry_prices = pd.Series(index=close.index, dtype=float, name='entry_prices')
+        exit_prices = pd.Series(index=close.index, dtype=float, name='exit_prices')
+        
+        # Populate entry prices (use close price at signal time)
+        all_entries = long_entries | short_entries
+        entry_prices[all_entries] = close[all_entries]
+        
+        # Populate exit prices (use close price at signal time)
+        all_exits = long_exits | short_exits
+        exit_prices[all_exits] = close[all_exits]
+        
         # Create comprehensive signals dictionary with proper naming
         self.signals = {
             # Primary signal names (for VectorBT compatibility)
@@ -327,6 +339,10 @@ class DMAATRTrendStrategy(BaseStrategy):
             'long_exits': long_exits,
             'short_entries': short_entries,
             'short_exits': short_exits,
+            
+            # Entry and exit prices for validation
+            'entry_prices': entry_prices,
+            'exit_prices': exit_prices,
             
             # Combined entry/exit signals for charts (will show both long and short)
             'entries': long_entries | short_entries,  # All entry signals 
@@ -345,7 +361,7 @@ class DMAATRTrendStrategy(BaseStrategy):
         self.signals = {k: v for k, v in self.signals.items() if v is not None}
         
         # Log signal statistics only if not in quiet mode
-        if logger.isEnabledFor(logging.INFO):
+        if logger.level != "ERROR":
             total_long_entries = long_entries.sum()
             total_long_exits = long_exits.sum() 
             total_short_entries = short_entries.sum()

@@ -49,9 +49,13 @@ from backtester.data import fetch_data
 from backtester.strategies.dma_atr_trend_strategy import DMAATRTrendStrategy
 from backtester.portfolio.simulation_engine import PortfolioSimulator, SimulationConfig
 from backtester.analysis.performance_analyzer import PerformanceAnalyzer
-from backtester.analysis.trading_charts_refactored import TradingChartsEngine
+from backtester.analysis.trading_charts import TradingChartsEngine
 from backtester.config.config_manager import ConfigManager
 from backtester.config.optimal_parameters_db import OptimalParametersDB
+from backtester.config.simulation_config import (
+    get_optimization_config, get_backtest_config, validate_config_consistency,
+    print_config_summary, get_simulation_config
+)
 from backtester.utilities.structured_logging import setup_logging
 
 # Default date ranges for consistent backtesting
@@ -82,6 +86,67 @@ DEFAULT_DATE_RANGES = {
 DEFAULT_PERIOD = 'recent_data'
 
 
+# Global configuration variables (set in main())
+_optimization_config = None
+_backtest_config = None
+
+def set_global_configs(opt_config, bt_config):
+    """Set global configuration objects for use in optimization and backtest functions."""
+    global _optimization_config, _backtest_config
+    _optimization_config = opt_config
+    _backtest_config = bt_config
+
+def optimize_dma_strategy_single(data, params):
+    """
+    Single strategy function for one parameter combination.
+    """
+    # Suppress all logging for optimization
+    import os
+    os.environ['QUIET_MODE'] = '1'
+    
+    try:
+        # Initialize strategy
+        strategy = DMAATRTrendStrategy(data, params)
+        indicators = strategy.init_indicators()
+        signals = strategy.generate_signals()
+        
+        # Validate that we have signals
+        if not signals:
+            return np.nan
+        
+        # Check if any signals exist (handle pandas Series properly)
+        has_signals = False
+        for key, value in signals.items():
+            if hasattr(value, 'any') and value.any():
+                has_signals = True
+                break
+        
+        if not has_signals:
+            return np.nan
+        
+        # Use global optimization configuration for consistent results
+        std_config = _optimization_config
+        std_config.freq = data.wrapper.freq if hasattr(data, "wrapper") else "D"
+        sim_config = std_config.to_simulation_config()
+        simulator = PortfolioSimulator(data, sim_config)
+        portfolio = simulator.simulate_from_signals(signals)
+        
+        # Extract Sharpe ratio safely
+        sharpe = portfolio.sharpe_ratio
+        if hasattr(sharpe, 'iloc'):
+            return float(sharpe.iloc[0])
+        else:
+            return float(sharpe)
+        
+    except Exception as e:
+        # Don't log individual optimization errors - they clutter the output
+        # Only return nan for failed combinations
+        return np.nan
+    finally:
+        # Reset quiet mode
+        os.environ.pop('QUIET_MODE', None)
+
+
 @vbt.parameterized(merge_func="concat")
 def optimize_dma_strategy(data, fast_window, slow_window, atr_window, atr_multiplier_sl, atr_multiplier_tp):
     """
@@ -97,22 +162,9 @@ def optimize_dma_strategy(data, fast_window, slow_window, atr_window, atr_multip
             'use_volume_filter': False
         }
         
-        strategy = DMAATRTrendStrategy(data, params)
-        strategy.init_indicators()
-        signals = strategy.generate_signals()
-        
-        # Use PortfolioSimulator for proper long/short signal handling
-        sim_config = SimulationConfig(
-            init_cash=100000,
-            fees=0.001,
-            freq=data.wrapper.freq if hasattr(data, "wrapper") else "D"
-        )
-        simulator = PortfolioSimulator(data, sim_config)
-        portfolio = simulator.simulate_from_signals(signals)
-        
-        return portfolio.sharpe_ratio
-        
+        return optimize_dma_strategy_single(data, params)
     except Exception as e:
+        # Don't log individual optimization errors
         return np.nan
 
 
@@ -247,10 +299,19 @@ def optimize_parameters(symbol, timeframe, data, param_ranges, logger, force_reo
     # Run optimization
     start_time = time.time()
     
+    # Use structured logging's quiet mode to suppress verbose output
     with logger.quiet_mode():
-        strategy_logger = logging.getLogger('backtester.strategies.dma_atr_trend_strategy')
-        original_level = strategy_logger.level
-        strategy_logger.setLevel(logging.WARNING)
+        # Also suppress any remaining loguru loggers during optimization
+        from backtester.utilities.structured_logging import logger as loguru_logger
+        from backtester.signals.signal_utils import logger as signal_logger
+        
+        # Disable all logging during optimization
+        loguru_logger.disable("backtester")
+        
+        # Set signal logger to quiet mode too
+        original_signal_level = signal_logger.level if hasattr(signal_logger, 'level') else None
+        if hasattr(signal_logger, 'level'):
+            signal_logger.level = "ERROR"
         
         try:
             sharpe_results = optimize_dma_strategy(
@@ -262,7 +323,10 @@ def optimize_parameters(symbol, timeframe, data, param_ranges, logger, force_reo
                 atr_multiplier_tp=vbt.Param(param_ranges['atr_multiplier_tp'])
             )
         finally:
-            strategy_logger.setLevel(original_level)
+            # Re-enable logging
+            loguru_logger.enable("backtester")
+            if hasattr(signal_logger, 'level') and original_signal_level:
+                signal_logger.level = original_signal_level
     
     optimization_time = time.time() - start_time
     
@@ -290,12 +354,10 @@ def optimize_parameters(symbol, timeframe, data, param_ranges, logger, force_reo
         strategy.init_indicators()
         signals = strategy.generate_signals()
         
-        # Use PortfolioSimulator for proper long/short signal handling
-        sim_config = SimulationConfig(
-            init_cash=100000,
-            fees=0.001,
-            freq=data.wrapper.freq if hasattr(data, "wrapper") else "D"
-        )
+        # Use global optimization configuration for validation (same as optimization)
+        std_config = _optimization_config
+        std_config.freq = data.wrapper.freq if hasattr(data, "wrapper") else "D"
+        sim_config = std_config.to_simulation_config()
         simulator = PortfolioSimulator(data, sim_config)
         portfolio = simulator.simulate_from_signals(signals)
         
@@ -349,10 +411,10 @@ def optimize_parameters(symbol, timeframe, data, param_ranges, logger, force_reo
             symbol=symbol,
             timeframe=timeframe,
             strategy_name="DMAATRTrendStrategy",
-            best_params=best_params,
-            performance_metrics=metrics,
+            best_params=convert_for_json(best_params),
+            performance_metrics=convert_for_json(metrics),
             parameter_ranges=convert_for_json(param_ranges),
-            optimization_stats=optimization_stats
+            optimization_stats=convert_for_json(optimization_stats)
         )
         
         return True, best_params, metrics, optimization_analysis
@@ -441,9 +503,9 @@ def create_streamlined_optimization_visualization(optimization_analysis, symbol,
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     import plotly.express as px
-    import logging
+    from backtester.utilities.structured_logging import get_logger
     
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     created_files = []
     
     try:
@@ -625,8 +687,9 @@ def save_optimization_analysis(optimization_analysis, symbol, timeframe, output_
     """
     import json
     import pandas as pd
+    from backtester.utilities.structured_logging import get_logger
     
-    logger = logging.getLogger(__name__)
+    logger = get_logger(__name__)
     
     # Create symbol-specific optimization directory organized by timeframe
     symbol_safe = symbol.replace('/', '_')
@@ -723,14 +786,20 @@ def run_backtest(symbol, timeframe, data, strategy_params, portfolio_params, log
         indicators = strategy.init_indicators()
         signals = strategy.generate_signals()
         
-        # Create portfolio
-        sim_config = SimulationConfig(
-            init_cash=portfolio_params.get("init_cash", 100000),
-            fees=portfolio_params.get("fees", 0.001),
-            slippage=portfolio_params.get("slippage", 0.0005),
-            freq=data.wrapper.freq if hasattr(data, "wrapper") else "D"
-        )
+        # Use global backtest configuration for consistent results
+        std_config = _backtest_config
+        std_config.freq = data.wrapper.freq if hasattr(data, "wrapper") else "D"
         
+        # Override with any portfolio_params if provided (for backward compatibility)
+        if portfolio_params:
+            if "init_cash" in portfolio_params:
+                std_config.init_cash = portfolio_params["init_cash"]
+            if "fees" in portfolio_params:
+                std_config.fees = portfolio_params["fees"]
+            if "slippage" in portfolio_params:
+                std_config.slippage = portfolio_params["slippage"]
+        
+        sim_config = std_config.to_simulation_config()
         simulator = PortfolioSimulator(data, sim_config)
         portfolio = simulator.simulate_from_signals(signals)
         
@@ -810,6 +879,14 @@ def main():
                        help='Reset stored parameters before testing')
     parser.add_argument('--no-plots', action='store_true',
                        help='Skip plot generation')
+    parser.add_argument('--quick', action='store_true',
+                       help='Use reduced parameter ranges for quick testing')
+    
+    # Simulation configuration options
+    parser.add_argument('--sim-mode', type=str, choices=['fast_optimization', 'realistic_trading', 'production_trading', 'development'],
+                       default='realistic_trading', help='Simulation configuration preset')
+    parser.add_argument('--use-same-config', action='store_true',
+                       help='Use same configuration for both optimization and backtest (default: separate configs)')
     
     # Output options
     parser.add_argument('--output-dir', type=str, default='results/general/testing',
@@ -826,6 +903,34 @@ def main():
     
     # Setup structured logging
     logger = setup_logging("INFO")
+    
+    # Initialize simulation configurations based on command line options
+    if args.use_same_config:
+        # Use same configuration for both optimization and backtest
+        optimization_config = get_simulation_config(args.sim_mode)
+        backtest_config = get_simulation_config(args.sim_mode)
+        logger.info(f"Using unified '{args.sim_mode}' configuration for both optimization and backtest")
+    else:
+        # Use separate configs optimized for each purpose
+        optimization_config = get_optimization_config()
+        backtest_config = get_backtest_config()
+        logger.info("Using separate optimized configurations for optimization and backtest")
+    
+    # Validate configuration consistency
+    configs_consistent = validate_config_consistency(optimization_config, backtest_config)
+    if not configs_consistent:
+        logger.warning("Optimization and backtest configurations differ - results may not be directly comparable")
+    
+    # Set global configurations for use in optimization and backtest functions
+    set_global_configs(optimization_config, backtest_config)
+    
+    # Show configuration summary
+    logger.section("⚙️ Simulation Configuration")
+    print("\n🔧 Optimization Configuration:")
+    print_config_summary(optimization_config)
+    print("\n🎯 Backtest Configuration:")
+    print_config_summary(backtest_config)
+    print()
     
     # Configuration summary
     total_combinations = len(symbols) * len(timeframes)
@@ -872,13 +977,24 @@ def main():
     
     # Get parameter ranges for optimization
     optimization_ranges = config.get("optimization_ranges", {})
-    param_ranges = {
-        'fast_window': optimization_ranges.get('short_ma_window', [10, 15, 20, 25, 30]),
-        'slow_window': optimization_ranges.get('long_ma_window', [40, 50, 60, 70, 80]),
-        'atr_window': optimization_ranges.get('atr_period', [10, 14, 20]),
-        'atr_multiplier_sl': optimization_ranges.get('sl_atr_multiplier', [1.5, 2.0, 2.5, 3.0]),
-        'atr_multiplier_tp': optimization_ranges.get('tp_atr_multiplier', [3.0, 4.0, 5.0, 6.0])
-    }
+    
+    # Use reduced ranges for testing if requested
+    if args.quick:
+        param_ranges = {
+            'fast_window': [20, 30],
+            'slow_window': [50, 60],
+            'atr_window': [14],
+            'atr_multiplier_sl': [2.0],
+            'atr_multiplier_tp': [3.0]
+        }
+    else:
+        param_ranges = {
+            'fast_window': optimization_ranges.get('short_ma_window', [10, 15, 20, 25, 30]),
+            'slow_window': optimization_ranges.get('long_ma_window', [40, 50, 60, 70, 80]),
+            'atr_window': optimization_ranges.get('atr_period', [10, 14, 20]),
+            'atr_multiplier_sl': optimization_ranges.get('sl_atr_multiplier', [1.5, 2.0, 2.5, 3.0]),
+            'atr_multiplier_tp': optimization_ranges.get('tp_atr_multiplier', [3.0, 4.0, 5.0, 6.0])
+        }
     
     # Portfolio parameters
     portfolio_params = config_manager.get_portfolio_params()
@@ -913,18 +1029,26 @@ def main():
         
         # Load data
         with logger.operation(f"Loading data for {symbol} {timeframe}"):
-            data = fetch_data(
-                symbols=[symbol],
-                exchange="binance",
-                timeframe=timeframe,
-                start_date=start_date,
-                end_date=end_date
-            )
+            # Use quiet mode to suppress verbose data fetching logs
+            with logger.quiet_mode():
+                data = fetch_data(
+                    symbols=[symbol],
+                    exchange="binance",
+                    timeframe=timeframe,
+                    start_date=start_date,
+                    end_date=end_date
+                )
             
             if data is None:
                 logger.error(f"Failed to load data for {symbol} {timeframe}")
                 failed_tests += 1
                 continue
+            
+            # Filter data to the exact date range for consistency
+            if start_date and end_date:
+                index = data.wrapper.index
+                mask = (index >= pd.to_datetime(start_date, utc=True)) & (index <= pd.to_datetime(end_date, utc=True))
+                data = data.loc[mask]
             
             data_points = len(data.get('close'))
             logger.success(f"Loaded {data_points} data points")
@@ -947,7 +1071,9 @@ def main():
                 # Save optimization analysis if new optimization was performed
                 if optimization_analysis:
                     with logger.operation(f"Saving optimization analysis for {symbol} {timeframe}"):
-                        created_files = save_optimization_analysis(optimization_analysis, symbol, timeframe, output_dir)
+                        # Use quiet mode to suppress verbose file operation logs
+                        with logger.quiet_mode():
+                            created_files = save_optimization_analysis(optimization_analysis, symbol, timeframe, output_dir)
                         
                         # Categorize files for better reporting
                         data_files = [f for f in created_files if f.endswith(('.csv', '.json'))]
@@ -983,9 +1109,11 @@ def main():
         
         # Run backtest
         with logger.operation(f"Running backtest for {symbol} {timeframe}"):
-            success, results = run_backtest(
-                symbol, timeframe, data, best_params, portfolio_params, logger, param_source
-            )
+            # Use quiet mode for individual backtest execution to reduce verbose output
+            with logger.quiet_mode():
+                success, results = run_backtest(
+                    symbol, timeframe, data, best_params, portfolio_params, logger, param_source
+                )
             
             if not success:
                 failed_tests += 1
@@ -1004,58 +1132,60 @@ def main():
         if not args.no_plots:
             with logger.operation(f"Creating visualizations for {symbol} {timeframe}"):
                 try:
-                    trading_charts = TradingChartsEngine(
-                        results['portfolio'], 
-                        results['data'], 
-                        indicators=results['indicators']
-                    )
-                    
-                    plot_configs = [
-                        ("main_chart.html", "Main Trading Chart", 
-                         lambda: trading_charts.create_main_chart(
-                             title=f"{symbol} {timeframe} - Trading Analysis ({start_date} to {end_date})",
-                             show_volume=True,
-                             show_signals=True,
-                             show_equity=True
-                         )),
-                        ("strategy_analysis.html", "Strategy Performance Analysis", 
-                         lambda: trading_charts.create_main_chart(
-                             title=f"{symbol} {timeframe} - Strategy Analysis ({start_date} to {end_date})",
-                             show_volume=False,
-                             show_signals=True,
-                             show_equity=True
-                         )),
-                    ]
-                    
-                    plots_created = []
-                    symbol_safe = symbol.replace('/', '_')
-                    symbol_plots_dir = f"results/symbols/{symbol_safe}/plots"
-                    os.makedirs(symbol_plots_dir, exist_ok=True)
-                    
-                    for filename, plot_name, plot_func in plot_configs:
-                        try:
-                            fig = plot_func()
-                            # Save to symbol-specific plots directory
-                            symbol_output_path = os.path.join(symbol_plots_dir, f"{symbol_safe}_{timeframe}_{filename}")
-                            fig.write_html(
-                                symbol_output_path,
-                                config={'displayModeBar': False},
-                                include_plotlyjs='cdn'
-                            )
-                            
-                            # Also save to general output directory for comparison
-                            general_output_path = os.path.join(output_dir, f"{symbol_safe}_{timeframe}_{filename}")
-                            fig.write_html(
-                                general_output_path,
-                                config={'displayModeBar': False},
-                                include_plotlyjs='cdn'
-                            )
-                            plots_created.append(general_output_path)
-                            
-                        except Exception as e:
-                            logger.warning(f"Failed to create {plot_name}: {str(e)}")
-                    
-                    results['plots'] = plots_created
+                    # Use quiet mode to suppress verbose chart rendering logs
+                    with logger.quiet_mode():
+                        trading_charts = TradingChartsEngine(
+                            results['portfolio'], 
+                            results['data'], 
+                            indicators=results['indicators']
+                        )
+                        
+                        plot_configs = [
+                            ("main_chart.html", "Main Trading Chart", 
+                             lambda: trading_charts.create_main_chart(
+                                 title=f"{symbol} {timeframe} - Trading Analysis ({start_date} to {end_date})",
+                                 show_volume=True,
+                                 show_signals=True,
+                                 show_equity=True
+                             )),
+                            ("strategy_analysis.html", "Strategy Performance Analysis", 
+                             lambda: trading_charts.create_main_chart(
+                                 title=f"{symbol} {timeframe} - Strategy Analysis ({start_date} to {end_date})",
+                                 show_volume=False,
+                                 show_signals=True,
+                                 show_equity=True
+                             )),
+                        ]
+                        
+                        plots_created = []
+                        symbol_safe = symbol.replace('/', '_')
+                        symbol_plots_dir = f"results/symbols/{symbol_safe}/plots"
+                        os.makedirs(symbol_plots_dir, exist_ok=True)
+                        
+                        for filename, plot_name, plot_func in plot_configs:
+                            try:
+                                fig = plot_func()
+                                # Save to symbol-specific plots directory
+                                symbol_output_path = os.path.join(symbol_plots_dir, f"{symbol_safe}_{timeframe}_{filename}")
+                                fig.write_html(
+                                    symbol_output_path,
+                                    config={'displayModeBar': False},
+                                    include_plotlyjs='cdn'
+                                )
+                                
+                                # Also save to general output directory for comparison
+                                general_output_path = os.path.join(output_dir, f"{symbol_safe}_{timeframe}_{filename}")
+                                fig.write_html(
+                                    general_output_path,
+                                    config={'displayModeBar': False},
+                                    include_plotlyjs='cdn'
+                                )
+                                plots_created.append(general_output_path)
+                                
+                            except Exception as e:
+                                logger.warning(f"Failed to create {plot_name}: {str(e)}")
+                        
+                        results['plots'] = plots_created
                     
                 except Exception as e:
                     logger.warning(f"Failed to create visualizations for {symbol} {timeframe}: {str(e)}")
